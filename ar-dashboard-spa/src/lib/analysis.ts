@@ -308,18 +308,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     if (rem > 0) {
       const reason = invoices.every(inv => +inv.invoiceDate > +p.paymentDate) ? 'before_first_invoice' : 'overpayment_or_future_invoice'
       unapplied.push({ date: p.paymentDate, amount: p.amount, remaining: rem, reason })
-      // Record as a synthetic prepayment so computedOutstanding reflects advances
-      invoices.push({
-        invoiceDate: p.paymentDate,
-        invoiceNum: 'PREPAY',
-        type: 'Prepayment',
-        amount: -rem,
-        remaining: -rem,
-        term: 0,
-        paid: true,
-        closingDate: p.paymentDate,
-        _synthetic: true,
-      })
     }
   }
   for (const inv of invoices) {
@@ -335,8 +323,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgPaymentLagDays = (allLagTotalAmt > 0) ? (allLagWeightedSum / allLagTotalAmt) : ''
   const sumAgeWeighted = unpaid.reduce((s,inv) => s + ((+today - +inv.invoiceDate)/86400000) * inv.remaining, 0)
   const sumRemaining = unpaid.reduce((s,inv) => s + inv.remaining, 0)
-  // For reconcile, include all invoice remaining (including synthetic opening and prepayments)
-  const totalRemainingAll = invoices.reduce((s,inv) => s + inv.remaining, 0)
   const avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : ''
   const overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : ''
   const blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce((s,inv) => {
@@ -427,9 +413,9 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const sumInvAmt = displayInvoices.reduce((s,inv) => s + inv.amount, 0)
   const sumPayAmt = payments.reduce((s,p) => s + p.amount, 0)
   const openingRemaining = (invoices.find(inv => inv._synthetic && inv.type === 'Opening')?.remaining) || 0
-  const computedOutstanding = totalRemainingAll
+  let computedOutstanding = 0 // will set after building ledger to match running balance approach
   const expectedOutstanding = beginningBalance + sumInvAmt - sumPayAmt
-  const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, openingRemaining, delta: computedOutstanding - expectedOutstanding }
+  const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, openingRemaining, delta: 0 }
 
   // Debug: pay type distribution and reconcile snapshot
   try {
@@ -460,6 +446,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     else if (it.kind === 'Prepayment') { bal += it.amount; const credit = it.amount < 0 ? -it.amount : 0; const debit = it.amount > 0 ? it.amount : 0; ledger.push({ date: it.date, kind: it.kind, description: it.description, debit, credit, balance: bal }) }
     else { bal += it.amount; ledger.push({ date: it.date, kind: it.kind, description: it.description, ref: it.ref, debit: it.amount, credit: 0, balance: bal }) }
   }
+
+  // Set computedOutstanding to the last ledger balance for 1:1 parity with expectedOutstanding
+  const ledgerEnd = ledger.length ? ledger[ledger.length - 1].balance : 0
+  reconcile.computedOutstanding = ledgerEnd
+  reconcile.delta = ledgerEnd - reconcile.expectedOutstanding
 
   return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile, ledger }
 }
