@@ -1,14 +1,16 @@
 import dayjs from 'dayjs'
 
-// Normalize Arabic-Indic digits and trim
+// Normalize Arabic-Indic and Eastern Arabic-Indic digits to ASCII
 export function normalizeDigits(v: any): string {
   const s = String(v ?? '')
-  // Arabic-Indic (٠١٢٣٤٥٦٧٨٩) and Eastern Arabic-Indic (۰۱۲۳۴۵۶۷۸۹)
-  const map: Record<string, string> = {
-    '٠': '0','١': '1','٢': '2','٣': '3','٤': '4','٥': '5','٦': '6','٧': '7','٨': '8','٩': '9',
-    '۰': '0','۱': '1','۲': '2','۳': '3','۴': '4','۵': '5','۶': '6','۷': '7','۸': '8','۹': '9',
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i)
+    if (code >= 0x0660 && code <= 0x0669) { out += String(code - 0x0660); continue }
+    if (code >= 0x06F0 && code <= 0x06F9) { out += String(code - 0x06F0); continue }
+    out += s[i]
   }
-  return s.replace(/[٠-٩۰-۹]/g, ch => map[ch] || ch)
+  return out
 }
 
 export function parseDMY(v: any): Date | null {
@@ -21,7 +23,7 @@ export function parseDMY(v: any): Date | null {
   }
   const s = normalizeDigits(v).trim()
   const head = s.includes(' ') ? s.slice(0, s.indexOf(' ')) : s
-  const norm = head.replace(/[.\-]/g, '/')
+  const norm = head.replace(/[\.\-]/g, '/')
   const parts = norm.split('/')
   if (parts.length !== 3) return null
   const dd = Number(parts[0]), mm = Number(parts[1])
@@ -65,7 +67,7 @@ export function amountToNumber(v: any): number {
 
 export function extractDateFromText(s: any): Date | null {
   if (!s) return null
-  const str = String(s)
+  const str = normalizeDigits(String(s))
   const re = /(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/
   const m = str.match(re)
   if (!m) return null
@@ -81,9 +83,10 @@ export function lc(s: any): string {
 export function normalizePayType(v: any): { type: string; termDays: number | null } {
   const t = lc(v).trim()
   if (!t) return { type: '', termDays: null }
-  if (/(cek|çek|cheque|check|vadeli)/.test(t)) return { type: 'Check', termDays: 90 }
-  if (/(kk|kredi\s*kart|credit\s*card|card)/.test(t)) return { type: 'Card', termDays: 30 }
-  if (/(peşin|pesin|cash|nakit)/.test(t)) return { type: 'Cash', termDays: 30 }
+  // Turkish + English + Arabic variants
+  if (/(cek|çek|cheque|check|senet|vadeli|بولصة|شيك)/.test(t)) return { type: 'Check', termDays: 90 }
+  if (/(kk|kredi\s*kart|credit\s*card|card|kart|بطاقة|فيزا|كردت)/.test(t)) return { type: 'Card', termDays: 30 }
+  if (/(peşin|pesin|cash|nakit|نقد|نقدي|كاش)/.test(t)) return { type: 'Cash', termDays: 30 }
   return { type: '', termDays: null }
 }
 
