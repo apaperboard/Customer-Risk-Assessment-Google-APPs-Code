@@ -384,11 +384,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   let weightedSum = 0, weightTotal = 0
   function add(comp: number | null, w: number) { if (comp == null) return; weightedSum += comp*w; weightTotal += w }
-  add(compLowerBetter(avgPaymentLagDays, 20, 40), 0.20)
+  add(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
   add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
   add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
-  add(compLowerBetter(blendedDaysToPay, 15, 50), 0.20)
-  add(compLowerBetter(avgCheckMaturityOverBy, 0, 30), 0.20)
+  add(compLowerBetter(blendedDaysToPay, 20, 35), 0.20)
+  add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
   add(compLowerBetter(pctChecksHandedOver30, 0.30, 0.60), 0.20)
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
