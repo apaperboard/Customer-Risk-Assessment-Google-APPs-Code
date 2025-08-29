@@ -39,6 +39,25 @@ export function findCol(headers: string[], names: string[]): number {
   return -1
 }
 
+function findByIncludes(headers: string[], names: string[]): number {
+  const lower = headers.map(h => h.toLowerCase())
+  for (let i = 0; i < lower.length; i++) {
+    const h = lower[i]
+    for (const n of names) { if (h.includes(n.toLowerCase())) return i + 1 }
+  }
+  return -1
+}
+
+function findAllByIncludes(headers: string[], names: string[]): number[] {
+  const lower = headers.map(h => h.toLowerCase())
+  const out: number[] = []
+  for (let i = 0; i < lower.length; i++) {
+    const h = lower[i]
+    for (const n of names) { if (h.includes(n.toLowerCase())) { out.push(i + 1); break } }
+  }
+  return out
+}
+
 export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   if (!rows.length) return { invoices: [], payments: [], firstInvoiceDate: null, firstTransactionDate: null }
   const origHeaders = Object.keys(rows[0])
@@ -74,9 +93,14 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   const cDesc   = findCol(headers, descNames)
   const cDate   = findCol(headers, dateNames)
   const cPayTp  = findCol(headers, payTypeNames)
+  // Additional helpers via substring match (handles mixed-language headers and composite labels)
+  const cMaturity = findByIncludes(headers, ['vade', 'vade tarihi', 'maturity', 'maturity date', 'due date', 'son ödeme', 'son odeme', 'vadesi'])
+  const descCols  = Array.from(new Set([
+    ...findAllByIncludes(headers, ['description','açıklama','aciklama','desc','not','memo','a. açıklama'])
+  ]))
 
   try {
-    console.debug('[parseRowsToModel] header mapping:', { headers, cCredit, cDebit, cDesc, cDate, cPayTp })
+    console.debug('[parseRowsToModel] header mapping:', { headers, cCredit, cDebit, cDesc, cDate, cPayTp, cMaturity })
   } catch {}
 
   function get(row: RowObject, col: number): any {
@@ -94,7 +118,13 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   for (const row of rows) {
     const credit = amountToNumber(get(row, cCredit))
     const debit  = amountToNumber(get(row, cDebit))
-    const desc   = get(row, cDesc)
+    const desc   = ((): any => {
+      for (const c of (descCols.length ? descCols : [cDesc])) {
+        const v = get(row, c)
+        if (v != null && String(v).trim() !== '') return v
+      }
+      return get(row, cDesc)
+    })()
     const date   = parseDMY(get(row, cDate)) || extractDateFromText(desc)
 
     const empty = [credit, debit, desc, date].every(v => v == null || v === '' || (typeof v === 'number' && isNaN(v)))
@@ -119,12 +149,12 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
 
     if (isFinite(debit) && debit > 0) {
       if (!date) continue
-      const payTypeRaw = get(row, cPayTp)
+      const payTypeRaw = get(row, cPayTp) || desc
       const norm = normalizePayType(payTypeRaw)
       payments.push({
         paymentDate: date,
         amount: debit,
-        maturityDate: extractDateFromText(desc) || null,
+        maturityDate: parseDMY(get(row, cMaturity)) || extractDateFromText(desc) || null,
         payType: norm.type,
         expectedTerm: norm.termDays,
       })
