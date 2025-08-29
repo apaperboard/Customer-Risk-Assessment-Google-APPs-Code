@@ -250,6 +250,7 @@ function DebugPanel() {
   const checkNoMatExamples: any[] = dbg.checkNoMatExamples || []
   const withMat = checkInspect.filter(x => !!x.maturity).length
   const withoutMat = checkInspect.length - withMat
+  const reconcile = dbg.reconcile || {}
 
   return (
     <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fffef8', marginBottom: 16 }}>
@@ -265,6 +266,13 @@ function DebugPanel() {
         <div>{typeof cMaturityIndex === 'number' ? String(cMaturityIndex) : 'n/a'}</div>
         <div>Checks parsed (with/without maturity):</div>
         <div>{withMat} / {withoutMat}</div>
+        <div>Reconcile (expected vs computed):</div>
+        <div>
+          {typeof reconcile.expectedOutstanding === 'number' ? reconcile.expectedOutstanding.toLocaleString() : 'n/a'}
+          {' '}vs{' '}
+          {typeof reconcile.computedOutstanding === 'number' ? reconcile.computedOutstanding.toLocaleString() : 'n/a'}
+          {typeof reconcile.delta === 'number' ? ` (delta ${reconcile.delta.toLocaleString()})` : ''}
+        </div>
         {checkNoMatExamples.length > 0 && (
           <>
             <div>First no-maturity example:</div>
@@ -272,6 +280,20 @@ function DebugPanel() {
           </>
         )}
       </div>
+      {checkInspect.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>First 3 Check Rows</div>
+          <ol>
+            {checkInspect.slice(0,3).map((x,i) => (
+              <li key={i} style={{ marginBottom: 4 }}>
+                <span style={{ color: '#555' }}>{String(x.desc).slice(0,120)}</span>
+                {' '}| maturity: {x.maturity ? new Date(x.maturity).toLocaleDateString() : '—'}
+                {' '}| raw: <span style={{ color: '#777' }}>{String(x.payTypeRaw).slice(0,60)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <div style={{ marginTop: 8, color: '#666' }}>
         Full details available in Console via window.__arDebug
       </div>

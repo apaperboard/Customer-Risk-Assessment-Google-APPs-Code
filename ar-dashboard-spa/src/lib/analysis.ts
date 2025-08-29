@@ -377,5 +377,14 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const months = Object.values(monthMap).sort((a,b) => +a.dt - +b.dt).map(m => ({ dt: m.dt, avg: m.sum/m.cnt }))
 
-  return { invoices: displayInvoices, metrics, aging, months, startDate }
+  // Reconciliation figures
+  const sumInvAmt = displayInvoices.reduce((s,inv) => s + inv.amount, 0)
+  const sumPayAmt = payments.reduce((s,p) => s + p.amount, 0)
+  const computedOutstanding = sumRemaining
+  const expectedOutstanding = beginningBalance + sumInvAmt - sumPayAmt
+  const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, delta: computedOutstanding - expectedOutstanding }
+
+  try { (globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile } } catch {}
+
+  return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile }
 }
