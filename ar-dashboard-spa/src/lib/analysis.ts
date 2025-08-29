@@ -146,9 +146,6 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     try { console.debug('[parseRowsToModel] debit vs credit positives (baseline debit=invoices):', { debPos, credPos, invoiceFromDebit }) } catch {}
   }
 
-  // Check counters for full counts (not just samples)
-  let checkTotal = 0, checkWithMat = 0, checkWithoutMat = 0
-
   for (const row of rows) {
     const credit = amountToNumber(get(row, cCredit))
     const debit  = amountToNumber(get(row, cDebit))
@@ -223,7 +220,6 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       } catch {}
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
 
-      if (effectiveType === 'Check') { checkTotal++; if (maturity) checkWithMat++; else checkWithoutMat++ }
     }
   }
 
@@ -412,7 +408,10 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   try {
     const payTypes: Record<string, number> = {}
     for (const p of payments) { const k = String(p.payType || ''); payTypes[k] = (payTypes[k] || 0) + 1 }
-    const checkCounts = { total: checkTotal, withMaturity: checkWithMat, withoutMaturity: checkWithoutMat }
+    const total = payments.filter(p => p.payType === 'Check').length
+    const withMaturity = payments.filter(p => p.payType === 'Check' && !!p.maturityDate).length
+    const withoutMaturity = total - withMaturity
+    const checkCounts = { total, withMaturity, withoutMaturity }
     ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts }
   } catch {}
 
