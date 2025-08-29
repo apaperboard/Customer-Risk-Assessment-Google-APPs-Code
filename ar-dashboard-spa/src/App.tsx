@@ -22,6 +22,55 @@ export default function App() {
   const t = (k: string) => i18n[lang][k] || k
   const locale = lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : 'en-US'
 
+  // Metric name translations (by original analysis label)
+  const metricNames: Record<string, { en: string; tr: string; ar: string }> = {
+    'Average Days to Pay (Paid Only)': {
+      en: 'Average Days to Pay (Paid Only)',
+      tr: 'Ödenenler İçin Ortalama Ödeme Günleri',
+      ar: 'متوسط أيام السداد (المدفوعة فقط)'
+    },
+    'Weighted Avg Age of Unpaid Invoices (Days)': {
+      en: 'Weighted Avg Age of Unpaid Invoices (Days)',
+      tr: 'Ödenmemiş Faturaların Ağırlıklı Ortalama Yaşı (Gün)',
+      ar: 'متوسط عمر الفواتير غير المدفوعة (مرجح) (أيام)'
+    },
+    '% of Unpaid Invoices Overdue': {
+      en: '% of Unpaid Invoices Overdue',
+      tr: '% Gecikmiş Ödenmemiş Fatura',
+      ar: '% من الفواتير غير المدفوعة المتأخرة'
+    },
+    'Blended Average Days to Pay': {
+      en: 'Blended Average Days to Pay',
+      tr: 'Harmanlanmış Ortalama Ödeme Günü',
+      ar: 'متوسط أيام السداد الممزوج'
+    },
+    'Average Check Maturity Duration (Days)': {
+      en: 'Average Check Maturity Duration (Days)',
+      tr: 'Çek Ortalama Vade Süresi (Gün)',
+      ar: 'متوسط مدة استحقاق الشيك (أيام)'
+    },
+    'Avg Maturity Over By (Days)': {
+      en: 'Avg Maturity Over By (Days)',
+      tr: 'Ortalama Vade Aşımı (Gün)',
+      ar: 'متوسط تجاوز الاستحقاق (أيام)'
+    },
+    '% of Payments Over Term': {
+      en: '% of Payments Over Term',
+      tr: '% Vade Aşımı Ödeme',
+      ar: '% من المدفوعات خارج المدة'
+    },
+    'Customer Risk Rating': {
+      en: 'Customer Risk Rating',
+      tr: 'Müşteri Risk Notu',
+      ar: 'تصنيف مخاطر العميل'
+    }
+  }
+  const assessNames: Record<'en'|'tr'|'ar', Record<string,string>> = {
+    en: { Good: 'Good', Average: 'Average', Poor: 'Poor' },
+    tr: { Good: 'İyi', Average: 'Orta', Poor: 'Zayıf' },
+    ar: { Good: 'جيد', Average: 'متوسط', Poor: 'ضعيف' }
+  }
+
   const onFile = async (f: File) => {
     console.log('[upload] file selected:', f.name, f.size)
     const buf = await f.arrayBuffer()
@@ -179,11 +228,13 @@ export default function App() {
                     return String(v)
                   }
                   const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
+                  const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
+                  const assessLocal = assessNames[lang][m.assess] ?? m.assess
                   return (
                     <tr key={i}>
-                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{m.label}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
                       <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{fmt(m.value)}</td>
-                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{m.assess}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{assessLocal}</td>
                     </tr>
                   )
                 })}
