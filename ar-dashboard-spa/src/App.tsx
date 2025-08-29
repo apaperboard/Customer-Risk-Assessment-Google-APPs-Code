@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
@@ -11,16 +11,23 @@ type UploadState = {
 export default function App() {
   const [upload, setUpload] = useState<UploadState>(null)
   const [beginBal, setBeginBal] = useState<string>('0')
+  const [toast, setToast] = useState<string | null>(null)
 
   const onFile = async (f: File) => {
+    console.log('[upload] file selected:', f.name, f.size)
     const buf = await f.arrayBuffer()
     const wb = XLSX.read(buf, { type: 'array' })
     const wsname = wb.SheetNames.find(n => /input/i.test(n)) || wb.SheetNames[0]
     const ws = wb.Sheets[wsname]
+    console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
     const { rows, autoBeginBalance } = extractTable(ws)
+    console.debug('[upload] rows parsed:', rows.length, 'autoBeginBalance:', autoBeginBalance)
     setUpload({ filename: f.name, rows })
     if (autoBeginBalance != null && beginBal === '0') {
-      setBeginBal(String(autoBeginBalance))
+      const v = String(autoBeginBalance)
+      setBeginBal(v)
+      setToast(`Opening balance detected: ${Number(v).toLocaleString()} TRY`)
+      setTimeout(() => setToast(null), 4000)
     }
   }
 
@@ -32,6 +39,21 @@ export default function App() {
     if (!start) return { error: 'No dated rows found.' }
     return analyze(model.invoices, model.payments, start, bb)
   }, [upload, beginBal])
+
+  useEffect(() => {
+    if (!result) return
+    if ('error' in result) {
+      console.warn('[analysis] error:', result.error)
+    } else {
+      console.log('[analysis] summary:', {
+        invoices: result.invoices.length,
+        months: result.months.length,
+        startDate: result.startDate,
+        aging: result.aging,
+      })
+      console.debug('[analysis] metrics:', result.metrics)
+    }
+  }, [result])
 
   const exportToExcel = () => {
     if (!result || 'error' in result) return
@@ -196,6 +218,11 @@ export default function App() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', right: 16, bottom: 16, background: '#111', color: 'white', padding: '8px 12px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', zIndex: 9999 }}>
+          {toast}
         </div>
       )}
     </div>

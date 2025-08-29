@@ -169,5 +169,21 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
     return true
   })
 
+  // Debug info on window for inspection
+  try {
+    ;(globalThis as any).__arDebug = {
+      headerRowIdx,
+      headers,
+      autoBeginBalance,
+      startIdx,
+      totalRows: grid.length,
+      bodyRows: body.length,
+      filteredRows: filtered.length,
+      sampleRow: filtered[0]
+    }
+    // Console logs for quick visibility
+    console.debug('[importer] headerRowIdx:', headerRowIdx, 'autoBeginBalance:', autoBeginBalance, 'rows:', filtered.length)
+  } catch {}
+
   return { rows: filtered, autoBeginBalance }
 }

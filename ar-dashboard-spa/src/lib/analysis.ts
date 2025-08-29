@@ -75,6 +75,10 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   const cDate   = findCol(headers, dateNames)
   const cPayTp  = findCol(headers, payTypeNames)
 
+  try {
+    console.debug('[parseRowsToModel] header mapping:', { headers, cCredit, cDebit, cDesc, cDate, cPayTp })
+  } catch {}
+
   function get(row: RowObject, col: number): any {
     if (col <= 0) return ''
     const keyLower = headers[col-1]
@@ -154,6 +158,9 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
 
   invoices.sort((a,b) => +a.invoiceDate - +b.invoiceDate)
   payments.sort((a,b) => +a.paymentDate - +b.paymentDate)
+  try {
+    console.debug('[parseRowsToModel] summary:', { invoices: invoices.length, payments: payments.length, firstInvoiceDate, firstTransactionDate })
+  } catch {}
   return { invoices, payments, firstInvoiceDate, firstTransactionDate }
 }
 
