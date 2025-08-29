@@ -115,6 +115,25 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   let firstInvoiceDate: Date | null = null
   let firstTransactionDate: Date | null = null
 
+  // Decide invoice vs payment mapping between debit/credit.
+  const headerJoined = headers.join(' ')
+  const hasBorc = /(borç|borc)/i.test(headerJoined)
+  const hasAlacak = /alacak/i.test(headerJoined)
+  let invoiceFromDebit = false
+  if (hasBorc && hasAlacak) {
+    invoiceFromDebit = true
+  } else if (cCredit > 0 && cDebit > 0) {
+    let debPos = 0, credPos = 0
+    for (const r of rows) {
+      const deb = amountToNumber(get(r as any, cDebit))
+      const cre = amountToNumber(get(r as any, cCredit))
+      if (isFinite(deb) && deb > 0) debPos++
+      if (isFinite(cre) && cre > 0) credPos++
+    }
+    if (debPos > credPos * 1.1) invoiceFromDebit = true
+    try { console.debug('[parseRowsToModel] debit vs credit positives:', { debPos, credPos, invoiceFromDebit }) } catch {}
+  }
+
   for (const row of rows) {
     const credit = amountToNumber(get(row, cCredit))
     const debit  = amountToNumber(get(row, cDebit))
@@ -130,15 +149,18 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     const empty = [credit, debit, desc, date].every(v => v == null || v === '' || (typeof v === 'number' && isNaN(v)))
     if (empty) continue
 
-    if (isFinite(credit) && credit > 0) {
+    const isInvoice = invoiceFromDebit ? (isFinite(debit) && debit > 0) : (isFinite(credit) && credit > 0)
+    const isPayment = invoiceFromDebit ? (isFinite(credit) && credit > 0) : (isFinite(debit) && debit > 0)
+
+    if (isInvoice) {
       if (!date) continue
       const invNumMatch = String(desc || '').match(/(No\s*\S+|\b[A-Z0-9\-]{6,}\b)/)
       invoices.push({
         invoiceDate: date,
         invoiceNum: invNumMatch ? invNumMatch[0] : '',
         type: 'Invoice',
-        amount: credit,
-        remaining: credit,
+        amount: invoiceFromDebit ? debit : credit,
+        remaining: invoiceFromDebit ? debit : credit,
         term: 30,
         paid: false,
         closingDate: null,
@@ -147,13 +169,13 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
     }
 
-    if (isFinite(debit) && debit > 0) {
+    if (isPayment) {
       if (!date) continue
       const payTypeRaw = get(row, cPayTp) || desc
       const norm = normalizePayType(payTypeRaw)
       payments.push({
         paymentDate: date,
-        amount: debit,
+        amount: invoiceFromDebit ? credit : debit,
         maturityDate: parseDMY(get(row, cMaturity)) || extractDateFromText(desc) || null,
         payType: norm.type,
         expectedTerm: norm.termDays,
