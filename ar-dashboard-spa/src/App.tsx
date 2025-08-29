@@ -249,8 +249,7 @@ function DebugPanel() {
   const cMaturityIndex: number | undefined = dbg.cMaturityIndex
   const checkInspect: any[] = dbg.checkInspect || []
   const checkNoMatExamples: any[] = dbg.checkNoMatExamples || []
-  const withMat = checkInspect.filter(x => !!x.maturity).length
-  const withoutMat = checkInspect.length - withMat
+  const counts = dbg.checkCounts || { total: checkInspect.length, withMaturity: checkInspect.filter((x:any)=>!!x.maturity).length, withoutMaturity: checkInspect.filter((x:any)=>!x.maturity).length }
   const reconcile = dbg.reconcile || {}
 
   return (
@@ -266,7 +265,7 @@ function DebugPanel() {
         <div>Maturity column index:</div>
         <div>{typeof cMaturityIndex === 'number' ? String(cMaturityIndex) : 'n/a'}</div>
         <div>Checks parsed (with/without maturity):</div>
-        <div>{withMat} / {withoutMat}</div>
+        <div>{counts.withMaturity} / {counts.withoutMaturity} (total {counts.total})</div>
         <div>Reconcile (expected vs computed):</div>
         <div>
           {typeof reconcile.expectedOutstanding === 'number' ? reconcile.expectedOutstanding.toLocaleString() : 'n/a'}

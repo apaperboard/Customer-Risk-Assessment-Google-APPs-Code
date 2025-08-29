@@ -146,6 +146,9 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     try { console.debug('[parseRowsToModel] debit vs credit positives (baseline debit=invoices):', { debPos, credPos, invoiceFromDebit }) } catch {}
   }
 
+  // Check counters for full counts (not just samples)
+  let checkTotal = 0, checkWithMat = 0, checkWithoutMat = 0
+
   for (const row of rows) {
     const credit = amountToNumber(get(row, cCredit))
     const debit  = amountToNumber(get(row, cDebit))
@@ -194,17 +197,20 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       })()
       const payTypeRaw = (() => { const pt = get(row, cPayTp); return pt ? (String(pt) + ' | ' + descAll) : descAll })()
       const norm = normalizePayType(payTypeRaw)
-      const maturity = parseDMY(get(row, cMaturity)) || extractDateFromText(descAll) || null
+      const descDate = extractDateFromText(descAll)
+      const maturity = parseDMY(get(row, cMaturity)) || descDate || null
+      // Business rule: Only treat as Check if there is a date in description
+      const effectiveType = (norm.type === 'Check' && !descDate) ? '' : norm.type
       payments.push({
         paymentDate: date,
         amount: invoiceFromDebit ? credit : debit,
         maturityDate: maturity,
-        payType: norm.type,
+        payType: effectiveType,
         expectedTerm: norm.termDays,
       })
       try {
         const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
-        if (norm.type === 'Check') {
+        if (effectiveType === 'Check') {
           const arr1 = (dbg.checkInspect ||= [])
           if (arr1.length < 10) arr1.push({ desc: descAll, maturity, payTypeRaw })
           if (!maturity) {
@@ -213,9 +219,11 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
           }
         }
         const pts = (dbg.payTypeSamples ||= [])
-        if (pts.length < 15) pts.push({ payTypeRaw, norm: norm.type })
+        if (pts.length < 15) pts.push({ payTypeRaw, norm: effectiveType })
       } catch {}
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
+
+      if (effectiveType === 'Check') { checkTotal++; if (maturity) checkWithMat++; else checkWithoutMat++ }
     }
   }
 
@@ -404,7 +412,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   try {
     const payTypes: Record<string, number> = {}
     for (const p of payments) { const k = String(p.payType || ''); payTypes[k] = (payTypes[k] || 0) + 1 }
-    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes }
+    const checkCounts = { total: checkTotal, withMaturity: checkWithMat, withoutMaturity: checkWithoutMat }
+    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts }
   } catch {}
 
   return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile }
