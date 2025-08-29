@@ -306,6 +306,18 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     if (rem > 0) {
       const reason = invoices.every(inv => +inv.invoiceDate > +p.paymentDate) ? 'before_first_invoice' : 'overpayment_or_future_invoice'
       unapplied.push({ date: p.paymentDate, amount: p.amount, remaining: rem, reason })
+      // Record as a synthetic prepayment so computedOutstanding reflects advances
+      invoices.push({
+        invoiceDate: p.paymentDate,
+        invoiceNum: 'PREPAY',
+        type: 'Prepayment',
+        amount: -rem,
+        remaining: -rem,
+        term: 0,
+        paid: true,
+        closingDate: p.paymentDate,
+        _synthetic: true,
+      })
     }
   }
   for (const inv of invoices) {
