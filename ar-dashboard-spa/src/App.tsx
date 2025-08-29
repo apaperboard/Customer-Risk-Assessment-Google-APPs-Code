@@ -13,6 +13,14 @@ export default function App() {
   const [beginBal, setBeginBal] = useState<string>('0')
   const [toast, setToast] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState<boolean>(false)
+  const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
+  const i18n: Record<'en'|'tr'|'ar', Record<string,string>> = {
+    en: { title: 'AR Analysis Dashboard (Client-side)', instructions: 'Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.', uploadFile: 'Upload File', noFile: 'No file selected', beginBal: 'Beginning Balance (TRY)', exportExcel: 'Export Excel', showDebug: 'Show Debug', hideDebug: 'Hide Debug', metrics: 'Metrics', metric: 'Metric', value: 'Value', assessment: 'Assessment', aging: 'Aging Buckets', bucket: 'Bucket', outstanding: 'Outstanding (TRY)', analysisTable: 'Analysis Table', invoiceDate: 'Invoice Date', invoiceNo: 'Invoice No', type: 'Type', amount: 'Amount', closingDate: 'Closing Date', termDays: 'Term (Days)', dueDate: 'Due Date', daysToPay: 'Days to Pay', daysAfterDue: 'Days After Due', remaining: 'Remaining', arBalance: 'AR Balance', ledger: 'Ledger', date: 'Date', description: 'Description', ref: 'Ref', debit: 'Debit', credit: 'Credit', running: 'Running Balance', language: 'Language' },
+    tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
+    ar: { title: 'لوحة تحليل الذمم (على المتصفح)', instructions: 'أسقط ملف Excel/CSV من نظام ERP أو اختر ملفاً. تبقى البيانات في المتصفح.', uploadFile: 'رفع ملف', noFile: 'لم يتم اختيار ملف', beginBal: 'الرصيد الافتتاحي (ليرة)', exportExcel: 'تصدير إلى Excel', showDebug: 'إظهار التصحيح', hideDebug: 'إخفاء التصحيح', metrics: 'المؤشرات', metric: 'المؤشر', value: 'القيمة', assessment: 'التقييم', aging: 'أعمار الديون', bucket: 'الفئة', outstanding: 'الرصيد (ليرة)', analysisTable: 'جدول التحليل', invoiceDate: 'تاريخ الفاتورة', invoiceNo: 'رقم الفاتورة', type: 'النوع', amount: 'المبلغ', closingDate: 'تاريخ الإقفال', termDays: 'المدة (أيام)', dueDate: 'تاريخ الاستحقاق', daysToPay: 'أيام السداد', daysAfterDue: 'أيام بعد الاستحقاق', remaining: 'المتبقي', arBalance: 'رصيد الذمم', ledger: 'دفتر القيود', date: 'التاريخ', description: 'الوصف', ref: 'المرجع', debit: 'مدين', credit: 'دائن', running: 'الرصيد المتراكم', language: 'اللغة' }
+  }
+  const t = (k: string) => i18n[lang][k] || k
+  const locale = lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : 'en-US'
 
   const onFile = async (f: File) => {
     console.log('[upload] file selected:', f.name, f.size)
@@ -100,20 +108,30 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
-      <h1>AR Analysis Dashboard (Client-side)</h1>
-      <p>Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.</p>
+    <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }} dir={lang==='ar'?'rtl':'ltr'}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <h1 style={{ margin:0 }}>{t('title')}</h1>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <label style={{ fontSize:12, color:'#555' }}>{t('language')}</label>
+          <select value={lang} onChange={e=>setLang(e.target.value as any)} style={{ padding:'4px 6px', borderRadius:6 }}>
+            <option value='en'>English</option>
+            <option value='tr'>Türkçe</option>
+            <option value='ar'>العربية</option>
+          </select>
+        </div>
+      </div>
+      <p>{t('instructions')}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
           <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => {
             const f = e.target.files?.[0]
             if (f) onFile(f)
           }} />
-          Upload File
+          {t('uploadFile')}
         </label>
-        <span>{upload ? upload.filename : 'No file selected'}</span>
+        <span>{upload ? upload.filename : t('noFile')}</span>
         <div>|</div>
-        <label>Beginning Balance (TRY): <input value={beginBal} onChange={e => setBeginBal(e.target.value)} style={{ width: 120 }} /></label>
+        <label>{t('beginBal')}: <input value={beginBal} onChange={e => setBeginBal(e.target.value)} style={{ width: 120 }} /></label>
         <div>|</div>
         <button
           onClick={exportToExcel}
@@ -126,7 +144,7 @@ export default function App() {
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <button onClick={() => setShowDebug(v => !v)} style={{ border: '1px solid #ccc', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', background: '#f6f6f6' }}>
-          {showDebug ? 'Hide Debug' : 'Show Debug'}
+          {showDebug ? t('hideDebug') : t('showDebug')}
         </button>
       </div>
 
@@ -141,13 +159,13 @@ export default function App() {
       {result && !('error' in result) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
-            <h2>Metrics</h2>
+            <h2>{t('metrics')}</h2>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>Metric</th>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>Value</th>
-                  <th style={{ textAlign: 'center', borderBottom: '1px solid #ddd', padding: 6 }}>Assessment</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('metric')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('value')}</th>
+                  <th style={{ textAlign: 'center', borderBottom: '1px solid #ddd', padding: 6 }}>{t('assessment')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -174,12 +192,12 @@ export default function App() {
           </div>
 
           <div>
-            <h2>Aging Buckets</h2>
+            <h2>{t('aging')}</h2>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>Bucket</th>
-                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>Outstanding (TRY)</th>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('bucket')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('outstanding')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -194,11 +212,11 @@ export default function App() {
           </div>
 
           <div style={{ gridColumn: '1 / span 2' }}>
-            <h2>Analysis Table</h2>
+            <h2>{t('analysisTable')}</h2>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  {['Invoice Date','Invoice No','Type','Amount','Closing Date','Term (Days)','Due Date','Days to Pay','Days After Due','Remaining','AR Balance'].map(h => (
+                  {[t('invoiceDate'),t('invoiceNo'),t('type'),t('amount'),t('closingDate'),t('termDays'),t('dueDate'),t('daysToPay'),t('daysAfterDue'),t('remaining'),t('arBalance')].map(h => (
                     <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
                   ))}
                 </tr>
@@ -231,11 +249,11 @@ export default function App() {
           </div>
 
           <div style={{ gridColumn: '1 / span 2' }}>
-            <h2>Ledger</h2>
+            <h2>{t('ledger')}</h2>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  {['Date','Type','Description','Ref','Debit','Credit','Running Balance'].map(h => (
+                  {[t('date'),t('type'),t('description'),t('ref'),t('debit'),t('credit'),t('running')].map(h => (
                     <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
                   ))}
                 </tr>
@@ -243,13 +261,13 @@ export default function App() {
               <tbody>
                 {(result.ledger || []).map((e: any, i: number) => (
                   <tr key={i}>
-                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{new Date(e.date).toLocaleDateString()}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{new Date(e.date).toLocaleDateString(locale)}</td>
                     <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.kind}</td>
                     <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.description}</td>
                     <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.ref || ''}</td>
-                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.debit ? e.debit.toLocaleString() : ''}</td>
-                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.credit ? e.credit.toLocaleString() : ''}</td>
-                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.balance.toLocaleString()}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.debit ? e.debit.toLocaleString(locale) : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.credit ? e.credit.toLocaleString(locale) : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.balance.toLocaleString(locale)}</td>
                   </tr>
                 ))}
               </tbody>
