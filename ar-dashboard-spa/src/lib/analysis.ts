@@ -333,9 +333,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgPaymentLagDays = (allLagTotalAmt > 0) ? (allLagWeightedSum / allLagTotalAmt) : ''
   const sumAgeWeighted = unpaid.reduce((s,inv) => s + ((+today - +inv.invoiceDate)/86400000) * inv.remaining, 0)
   const sumRemaining = unpaid.reduce((s,inv) => s + inv.remaining, 0)
-  // For reconcile, include synthetic opening invoice remaining too
-  const unpaidAll = invoices.filter(inv => inv.remaining > 0)
-  const sumRemainingAll = unpaidAll.reduce((s,inv) => s + inv.remaining, 0)
+  // For reconcile, include all invoice remaining (including synthetic opening and prepayments)
+  const totalRemainingAll = invoices.reduce((s,inv) => s + inv.remaining, 0)
   const avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : ''
   const overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : ''
   const blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce((s,inv) => {
@@ -425,8 +424,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   // Reconciliation figures
   const sumInvAmt = displayInvoices.reduce((s,inv) => s + inv.amount, 0)
   const sumPayAmt = payments.reduce((s,p) => s + p.amount, 0)
-  const openingRemaining = invoices.find(inv => inv._synthetic)?.remaining || 0
-  const computedOutstanding = sumRemainingAll
+  const openingRemaining = (invoices.find(inv => inv._synthetic && inv.type === 'Opening')?.remaining) || 0
+  const computedOutstanding = totalRemainingAll
   const expectedOutstanding = beginningBalance + sumInvAmt - sumPayAmt
   const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, openingRemaining, delta: computedOutstanding - expectedOutstanding }
 
