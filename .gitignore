@@ -1,0 +1,17 @@
+# Node / frontend
+ar-dashboard-spa/node_modules/
+ar-dashboard-spa/.vite/
+ar-dashboard-spa/.turbo/
+ar-dashboard-spa/dist/
+ar-dashboard-spa/*.log
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Apps Script local
+.clasp.json
+.claspignore
+node_modules/
+*.log
+
