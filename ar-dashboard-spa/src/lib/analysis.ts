@@ -281,6 +281,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
 
   // FIFO + tracking
   let allLagTotalAmt = 0, allLagWeightedSum = 0
+  const unapplied: { date: Date; amount: number; remaining: number; reason: string }[] = []
   for (const p of payments) {
     let rem = p.amount
     for (const inv of invoices) {
@@ -302,6 +303,10 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       }
       if (inv.remaining === 0) { inv.paid = true; inv.closingDate = p.paymentDate }
     }
+    if (rem > 0) {
+      const reason = invoices.every(inv => +inv.invoiceDate > +p.paymentDate) ? 'before_first_invoice' : 'overpayment_or_future_invoice'
+      unapplied.push({ date: p.paymentDate, amount: p.amount, remaining: rem, reason })
+    }
   }
   for (const inv of invoices) {
     if (inv._synthetic) continue
@@ -316,6 +321,9 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgPaymentLagDays = (allLagTotalAmt > 0) ? (allLagWeightedSum / allLagTotalAmt) : ''
   const sumAgeWeighted = unpaid.reduce((s,inv) => s + ((+today - +inv.invoiceDate)/86400000) * inv.remaining, 0)
   const sumRemaining = unpaid.reduce((s,inv) => s + inv.remaining, 0)
+  // For reconcile, include synthetic opening invoice remaining too
+  const unpaidAll = invoices.filter(inv => inv.remaining > 0)
+  const sumRemainingAll = unpaidAll.reduce((s,inv) => s + inv.remaining, 0)
   const avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : ''
   const overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : ''
   const blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce((s,inv) => {
@@ -405,9 +413,10 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   // Reconciliation figures
   const sumInvAmt = displayInvoices.reduce((s,inv) => s + inv.amount, 0)
   const sumPayAmt = payments.reduce((s,p) => s + p.amount, 0)
-  const computedOutstanding = sumRemaining
+  const openingRemaining = invoices.find(inv => inv._synthetic)?.remaining || 0
+  const computedOutstanding = sumRemainingAll
   const expectedOutstanding = beginningBalance + sumInvAmt - sumPayAmt
-  const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, delta: computedOutstanding - expectedOutstanding }
+  const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, openingRemaining, delta: computedOutstanding - expectedOutstanding }
 
   // Debug: pay type distribution and reconcile snapshot
   try {
@@ -417,22 +426,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     const withMaturity = payments.filter(p => p.payType === 'Check' && !!p.maturityDate).length
     const withoutMaturity = total - withMaturity
     const checkCounts = { total, withMaturity, withoutMaturity }
-    // Unapplied payments (those happening before first invoice or net overpayment)
-    const unapplied: { date: Date; amount: number; reason: string }[] = []
-    for (const p of payments) {
-      let remaining = p.amount
-      for (const inv of invoices) {
-        if (+inv.invoiceDate > +p.paymentDate) continue
-        const used = Math.min(remaining, (inv.amount - inv.remaining)) // amount already applied to this invoice
-        remaining -= used
-        if (remaining <= 0) break
-      }
-      if (remaining > 0) {
-        // Could not be fully attributed by date order; likely before first invoice or overpayment
-        const reason = (invoices.every(inv => +inv.invoiceDate > +p.paymentDate)) ? 'before_first_invoice' : 'overpayment'
-        unapplied.push({ date: p.paymentDate, amount: remaining, reason })
-      }
-    }
     ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied }
   } catch {}
 
