@@ -214,6 +214,11 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
             const arr2 = (dbg.checkNoMatExamples ||= [])
             if (arr2.length < 10) arr2.push({ date, payTypeRaw, desc: descAll })
           }
+          const all = (dbg.checkAll ||= [])
+          all.push({ date, maturity, amount: invoiceFromDebit ? credit : debit, desc: descAll, payTypeRaw })
+        } else if (descDate) {
+          const cand = (dbg.checkCandidatesNotClassified ||= [])
+          cand.push({ date, desc: descAll, payTypeRaw })
         }
         const pts = (dbg.payTypeSamples ||= [])
         if (pts.length < 15) pts.push({ payTypeRaw, norm: effectiveType })

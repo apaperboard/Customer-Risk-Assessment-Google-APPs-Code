@@ -197,7 +197,12 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
       totalRows: grid.length,
       bodyRows: body.length,
       filteredRows: filtered.length,
-      sampleRow: filtered[0]
+      sampleRow: filtered[0],
+      // reset runtime collections for this upload
+      checkInspect: [],
+      checkNoMatExamples: [],
+      checkAll: [],
+      payTypeSamples: []
     }
     // Console logs for quick visibility
     console.debug('[importer] headerRowIdx:', headerRowIdx, 'autoBeginBalance:', autoBeginBalance, 'rows:', filtered.length)
