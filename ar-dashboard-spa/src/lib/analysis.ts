@@ -183,9 +183,18 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
 
     if (isPayment) {
       if (!date) continue
-      const payTypeRaw = get(row, cPayTp) || desc
+      const descAll = ((): string => {
+        const parts: string[] = []
+        for (const c of (descCols.length ? descCols : [cDesc])) {
+          const v = get(row, c)
+          if (v != null && String(v).trim() !== '') parts.push(String(v))
+        }
+        if (parts.length === 0) parts.push(String(desc ?? ''))
+        return parts.join(' | ')
+      })()
+      const payTypeRaw = (() => { const pt = get(row, cPayTp); return pt ? (String(pt) + ' | ' + descAll) : descAll })()
       const norm = normalizePayType(payTypeRaw)
-      const maturity = parseDMY(get(row, cMaturity)) || extractDateFromText(desc) || null
+      const maturity = parseDMY(get(row, cMaturity)) || extractDateFromText(descAll) || null
       payments.push({
         paymentDate: date,
         amount: invoiceFromDebit ? credit : debit,
@@ -197,12 +206,14 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
         const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
         if (norm.type === 'Check') {
           const arr1 = (dbg.checkInspect ||= [])
-          if (arr1.length < 10) arr1.push({ desc, maturity, payTypeRaw })
+          if (arr1.length < 10) arr1.push({ desc: descAll, maturity, payTypeRaw })
           if (!maturity) {
             const arr2 = (dbg.checkNoMatExamples ||= [])
-            if (arr2.length < 10) arr2.push({ date, payTypeRaw, desc })
+            if (arr2.length < 10) arr2.push({ date, payTypeRaw, desc: descAll })
           }
         }
+        const pts = (dbg.payTypeSamples ||= [])
+        if (pts.length < 15) pts.push({ payTypeRaw, norm: norm.type })
       } catch {}
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
     }
