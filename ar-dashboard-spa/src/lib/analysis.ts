@@ -284,6 +284,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   // FIFO + tracking
   let allLagTotalAmt = 0, allLagWeightedSum = 0
   const unapplied: { date: Date; amount: number; remaining: number; reason: string }[] = []
+  const advances: { date: Date; remaining: number; payType: string; maturityDate: Date | null; expectedTerm: number | null }[] = []
   for (const p of payments) {
     let rem = p.amount
     for (const inv of invoices) {
@@ -308,7 +309,32 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     if (rem > 0) {
       const reason = invoices.every(inv => +inv.invoiceDate > +p.paymentDate) ? 'before_first_invoice' : 'overpayment_or_future_invoice'
       unapplied.push({ date: p.paymentDate, amount: p.amount, remaining: rem, reason })
+      advances.push({ date: p.paymentDate, remaining: rem, payType: p.payType, maturityDate: p.maturityDate, expectedTerm: p.expectedTerm })
     }
+  }
+
+  // Apply advances to future invoices (carry-over prepayments)
+  advances.sort((a,b) => +a.date - +b.date)
+  for (const adv of advances) {
+    let rem = adv.remaining
+    for (const inv of invoices) {
+      if (rem <= 0) break
+      if (+inv.invoiceDate <= +adv.date) continue
+      if (inv.remaining <= 0) continue
+      const applied = Math.min(inv.remaining, rem)
+      if (applied <= 0) continue
+      inv.remaining -= applied
+      rem -= applied
+      // advance has zero lag contribution (payment precedes invoice)
+      allLagTotalAmt += applied
+      // track check-specific if advance came from a check
+      if (adv.payType === 'Check') {
+        (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null })
+      }
+      if (inv.remaining === 0) { inv.paid = true; inv.closingDate = inv.invoiceDate }
+    }
+    // update leftover for debug
+    adv.remaining = rem
   }
   for (const inv of invoices) {
     if (inv._synthetic) continue
@@ -425,7 +451,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     const withMaturity = payments.filter(p => p.payType === 'Check' && !!p.maturityDate).length
     const withoutMaturity = total - withMaturity
     const checkCounts = { total, withMaturity, withoutMaturity }
-    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied }
+    const unappliedAfterCarry = advances.filter(a => a.remaining > 0).map(a => ({ date: a.date, remaining: a.remaining }))
+    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied, unappliedAfterCarry }
   } catch {}
 
   // Build Ledger (date-ordered invoices + payments + prepayments + opening)
