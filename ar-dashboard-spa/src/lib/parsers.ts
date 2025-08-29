@@ -91,7 +91,7 @@ export function extractDateFromText(s: any): Date | null {
   if (m) {
     const dd = Number(m[1]); const key = m[2].normalize('NFC')
     const mm = monthMap[key as keyof typeof monthMap]
-    let y = m[3]; if (y.length === '2') y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
+    let y = m[3]; if ((y as string).length === 2) y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
     const yyyy = Number(y)
     if (mm) {
       const dt = new Date(yyyy, mm - 1, dd)
