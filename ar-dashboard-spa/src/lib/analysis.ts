@@ -417,7 +417,23 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     const withMaturity = payments.filter(p => p.payType === 'Check' && !!p.maturityDate).length
     const withoutMaturity = total - withMaturity
     const checkCounts = { total, withMaturity, withoutMaturity }
-    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts }
+    // Unapplied payments (those happening before first invoice or net overpayment)
+    const unapplied: { date: Date; amount: number; reason: string }[] = []
+    for (const p of payments) {
+      let remaining = p.amount
+      for (const inv of invoices) {
+        if (+inv.invoiceDate > +p.paymentDate) continue
+        const used = Math.min(remaining, (inv.amount - inv.remaining)) // amount already applied to this invoice
+        remaining -= used
+        if (remaining <= 0) break
+      }
+      if (remaining > 0) {
+        // Could not be fully attributed by date order; likely before first invoice or overpayment
+        const reason = (invoices.every(inv => +inv.invoiceDate > +p.paymentDate)) ? 'before_first_invoice' : 'overpayment'
+        unapplied.push({ date: p.paymentDate, amount: remaining, reason })
+      }
+    }
+    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied }
   } catch {}
 
   return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile }
