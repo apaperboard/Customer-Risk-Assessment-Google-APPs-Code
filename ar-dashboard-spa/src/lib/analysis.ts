@@ -119,7 +119,8 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   const headerJoined = headers.join(' ')
   const hasBorc = /(borç|borc)/i.test(headerJoined)
   const hasAlacak = /alacak/i.test(headerJoined)
-  let invoiceFromDebit = false
+  // Baseline mapping: debit (borç/مدين/debit) are invoices; credit are payments
+  let invoiceFromDebit = true
   if (hasBorc && hasAlacak) {
     invoiceFromDebit = true
   } else if (cCredit > 0 && cDebit > 0) {
@@ -130,8 +131,9 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       if (isFinite(deb) && deb > 0) debPos++
       if (isFinite(cre) && cre > 0) credPos++
     }
-    if (debPos > credPos * 1.1) invoiceFromDebit = true
-    try { console.debug('[parseRowsToModel] debit vs credit positives:', { debPos, credPos, invoiceFromDebit }) } catch {}
+    // If credit positives dominate significantly, flip mapping
+    if (credPos > debPos * 1.1) invoiceFromDebit = false
+    try { console.debug('[parseRowsToModel] debit vs credit positives (baseline debit=invoices):', { debPos, credPos, invoiceFromDebit }) } catch {}
   }
 
   for (const row of rows) {
