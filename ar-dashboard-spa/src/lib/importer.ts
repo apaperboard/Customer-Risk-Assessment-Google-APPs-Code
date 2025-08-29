@@ -20,7 +20,11 @@ const HEADER_ALIASES = {
     'credit','alacak','fatura','الفاتورة','المبلغ الدائن','دائن','invoice','fatura tutari','fatura miktari'
   ],
   paytype: [
-    'pay type','payment type','ödeme tipi','odeme tipi','odeme turu','tahsilat tipi','نوع الدفع','طريقة الدفع','paytype'
+    'pay type','payment type','ödeme tipi','odeme tipi','odeme turu','tahsilat tipi','paytype',
+    // Some ERPs place payment method under a generic 'project' column name
+    'proje','projekt',
+    // Arabic labels
+    'نوع الدفع','طريقة الدفع','المشروع'
   ]
 }
 
