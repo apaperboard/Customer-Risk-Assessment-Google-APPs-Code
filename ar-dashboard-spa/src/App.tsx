@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
+import { extractTable } from './lib/importer'
 
 type UploadState = {
   filename: string
@@ -16,8 +17,11 @@ export default function App() {
     const wb = XLSX.read(buf, { type: 'array' })
     const wsname = wb.SheetNames.find(n => /input/i.test(n)) || wb.SheetNames[0]
     const ws = wb.Sheets[wsname]
-    const json = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Record<string, any>[]
-    setUpload({ filename: f.name, rows: json })
+    const { rows, autoBeginBalance } = extractTable(ws)
+    setUpload({ filename: f.name, rows })
+    if (autoBeginBalance != null && beginBal === '0') {
+      setBeginBal(String(autoBeginBalance))
+    }
   }
 
   const result = useMemo(() => {

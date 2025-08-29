@@ -1,5 +1,16 @@
 import dayjs from 'dayjs'
 
+// Normalize Arabic-Indic digits and trim
+export function normalizeDigits(v: any): string {
+  const s = String(v ?? '')
+  // Arabic-Indic (٠١٢٣٤٥٦٧٨٩) and Eastern Arabic-Indic (۰۱۲۳۴۵۶۷۸۹)
+  const map: Record<string, string> = {
+    '٠': '0','١': '1','٢': '2','٣': '3','٤': '4','٥': '5','٦': '6','٧': '7','٨': '8','٩': '9',
+    '۰': '0','۱': '1','۲': '2','۳': '3','۴': '4','۵': '5','۶': '6','۷': '7','۸': '8','۹': '9',
+  }
+  return s.replace(/[٠-٩۰-۹]/g, ch => map[ch] || ch)
+}
+
 export function parseDMY(v: any): Date | null {
   if (v == null || v === '') return null
   if (v instanceof Date && !isNaN(+v)) return v
@@ -8,7 +19,7 @@ export function parseDMY(v: any): Date | null {
     const d = Math.floor(v), MS = 86400000
     return new Date(base.getTime() + d * MS + Math.round((v - d) * MS))
   }
-  const s = String(v).trim()
+  const s = normalizeDigits(v).trim()
   const head = s.includes(' ') ? s.slice(0, s.indexOf(' ')) : s
   const norm = head.replace(/[.\-]/g, '/')
   const parts = norm.split('/')
@@ -37,7 +48,7 @@ export function daysBetween(a: any, b: any): number {
 
 export function amountToNumber(v: any): number {
   if (v == null || v === '') return NaN
-  let s = String(v).trim().replace(/\u00A0/g, ' ').replace(/[^\d,.\-]/g, '')
+  let s = normalizeDigits(v).trim().replace(/\u00A0/g, ' ').replace(/[^\d,.\-]/g, '')
   if (s.includes(',') && s.includes('.')) {
     const lc = s.lastIndexOf(','), ld = s.lastIndexOf('.')
     s = (lc > ld) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '')
