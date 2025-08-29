@@ -68,30 +68,49 @@ export function amountToNumber(v: any): number {
 export function extractDateFromText(s: any): Date | null {
   if (!s) return null
   const str = normalizeDigits(String(s))
-  // 1) dd/mm/yyyy or dd.mm.yyyy or dd-mm-yy
-  let m = str.match(/(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/)
+  // Prefer labelled maturity/due terms close to a date
+  const labelTerms = ['vade','vadesi','vade tarihi','son ödeme','son odeme','maturity','maturity date','due','due date','استحقاق','تاريخ الاستحقاق','الاستحقاق','تستحق']
+  const labelPattern = new RegExp('(?:' + labelTerms.join('|') + ')[^0-9]{0,20}(\\d{1,2}[\\/\\.\\-]\\d{1,2}[\\/\\.\\-]\\d{2,4})','i')
+  let m = str.match(labelPattern)
   if (m) {
-    let y = String(m[3])
-    if (y.length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
-    return parseDMY(m[1] + '/' + m[2] + '/' + y)
+    const d = m[1]
+    const parts = d.split(/[\.\/-]/)
+    let y = parts[2]
+    if ((y as string).length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
+    return parseDMY(parts[0] + '/' + parts[1] + '/' + y)
   }
-  // 2) yyyy-mm-dd or yyyy/mm/dd
-  m = str.match(/\b(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\b/)
-  if (m) {
-    const y = Number(m[1]), mm = Number(m[2]), dd = Number(m[3])
+
+  // 1) dd/mm/yyyy or dd.mm.yyyy or dd-mm-yy (take last match)
+  let last: RegExpExecArray | null = null
+  const re1 = /(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/g
+  let mmatch: RegExpExecArray | null
+  while ((mmatch = re1.exec(str)) !== null) last = mmatch
+  if (last) {
+    let y = String(last[3])
+    if (y.length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
+    return parseDMY(last[1] + '/' + last[2] + '/' + y)
+  }
+  // 2) yyyy-mm-dd or yyyy/mm/dd (take last match)
+  last = null
+  const re2 = /\b(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\b/g
+  while ((mmatch = re2.exec(str)) !== null) last = mmatch
+  if (last) {
+    const y = Number(last[1]), mm = Number(last[2]), dd = Number(last[3])
     const dt = new Date(y, mm - 1, dd)
     return isNaN(+dt) ? null : dt
   }
-  // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR)
+  // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR) (take last match)
   const monthMap: Record<string, number> = {
     jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
     ocak:1,şubat:2,subat:2,mart:3,nisan:4,mayıs:5,mayis:5,haziran:6,temmuz:7,ağustos:8,agustos:8,eylül:9,eylul:9,ekim:10,kasım:11,kasim:11,aralık:12,aralik:12
   }
-  m = str.toLowerCase().match(/\b(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{2,4})\b/)
-  if (m) {
-    const dd = Number(m[1]); const key = m[2].normalize('NFC')
+  last = null
+  const re3 = /\b(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{2,4})\b/gi
+  while ((mmatch = re3.exec(str.toLowerCase())) !== null) last = mmatch
+  if (last) {
+    const dd = Number(last[1]); const key = last[2].normalize('NFC')
     const mm = monthMap[key as keyof typeof monthMap]
-    let y = m[3]; if ((y as string).length === 2) y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
+    let y = last[3]; if ((y as string).length === 2) y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
     const yyyy = Number(y)
     if (mm) {
       const dt = new Date(yyyy, mm - 1, dd)

@@ -11,7 +11,7 @@ const HEADER_ALIASES = {
     'date','tarih','التاريخ','تاريخ','tarİh','tari̇h'
   ],
   desc: [
-    'description','açıklama','aciklama','الوصف','شرح','desc','not','memo'
+    'açıklama','aciklama','الوصف','البيان','شرح','description','desc','not','memo'
   ],
   debit: [
     'debit','borç','borc','ödeme','odeme','tahsilat','المبلغ المدين','مدين','payment'
@@ -88,6 +88,12 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
   const iDebit = idxOf(HEADER_ALIASES.debit)
   const iCredit= idxOf(HEADER_ALIASES.credit)
   const iPayTp = idxOf(HEADER_ALIASES.paytype)
+  // Additional: collect all description-like columns to prioritize non-empty text
+  const descCandidateIdx: number[] = []
+  for (let i = 0; i < lower.length; i++) {
+    const h = lower[i]
+    if (HEADER_ALIASES.desc.some(a => h.includes(a))) descCandidateIdx.push(i)
+  }
 
   return rows.map(r => {
     const obj: Record<string, any> = {}
@@ -97,7 +103,14 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
     }
     // Also provide canonical keys to make downstream matching robust
     if (iDate  >= 0) obj['date'] = r[iDate] ?? obj['date'] ?? ''
-    if (iDesc  >= 0) obj['description'] = r[iDesc] ?? obj['description'] ?? ''
+    // description: prefer Açıklama/الوصف/البيان/شرح over plain 'description', then fallbacks
+    let descVal = ''
+    for (const idx of descCandidateIdx) { if (r[idx] != null && String(r[idx]).trim() !== '') { descVal = r[idx]; break } }
+    if (!descVal && iDesc >= 0) descVal = r[iDesc] ?? ''
+    if (!descVal && typeof obj['desc'] === 'string') descVal = obj['desc']
+    if (!descVal && typeof obj['not'] === 'string') descVal = obj['not']
+    if (!descVal && typeof obj['memo'] === 'string') descVal = obj['memo']
+    if (descVal) obj['description'] = descVal
     if (iDebit >= 0) obj['debit'] = r[iDebit] ?? obj['debit'] ?? ''
     if (iCredit>= 0) obj['credit'] = r[iCredit] ?? obj['credit'] ?? ''
     if (iPayTp >= 0) obj['pay type'] = r[iPayTp] ?? obj['pay type'] ?? ''
@@ -174,6 +187,7 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
     ;(globalThis as any).__arDebug = {
       headerRowIdx,
       headers,
+      headersLower: headers.map((h:any)=>String(h).toLowerCase()),
       autoBeginBalance,
       startIdx,
       totalRows: grid.length,

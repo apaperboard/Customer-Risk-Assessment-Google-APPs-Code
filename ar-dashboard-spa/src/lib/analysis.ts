@@ -184,10 +184,14 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
         expectedTerm: norm.termDays,
       })
       try {
-        if (norm.type === 'Check' && !maturity) {
-          const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
-          const arr = (dbg.checkNoMatExamples ||= [])
-          if (arr.length < 10) arr.push({ date, payTypeRaw, desc })
+        const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+        if (norm.type === 'Check') {
+          const arr1 = (dbg.checkInspect ||= [])
+          if (arr1.length < 10) arr1.push({ desc, maturity, payTypeRaw })
+          if (!maturity) {
+            const arr2 = (dbg.checkNoMatExamples ||= [])
+            if (arr2.length < 10) arr2.push({ date, payTypeRaw, desc })
+          }
         }
       } catch {}
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
