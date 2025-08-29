@@ -128,7 +128,7 @@ export function normalizePayType(v: any): { type: string; termDays: number | nul
   const t = lc(v).trim()
   if (!t) return { type: '', termDays: null }
   // Turkish + English + Arabic variants
-  if (/(cek|çek|cheque|check|senet|vadeli|بولصة|شيك)/.test(t)) return { type: 'Check', termDays: 90 }
+  if (/(\bcek\b|\bçek\b|cheque|check|senet|\bcek\s|\scek\b|\bçek\s|\sçek\b|بولصة|شيك)/.test(t)) return { type: 'Check', termDays: 90 }
   if (/(kk|kredi\s*kart|credit\s*card|card|kart|بطاقة|فيزا|كردت)/.test(t)) return { type: 'Card', termDays: 30 }
   if (/(peşin|pesin|cash|nakit|نقد|نقدي|كاش)/.test(t)) return { type: 'Cash', termDays: 30 }
   return { type: '', termDays: null }

@@ -6,6 +6,7 @@ export type Invoice = {
   type: string
   amount: number
   remaining: number
+  running?: number
   term: number
   paid: boolean
   closingDate: Date | null
@@ -377,6 +378,10 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const months = Object.values(monthMap).sort((a,b) => +a.dt - +b.dt).map(m => ({ dt: m.dt, avg: m.sum/m.cnt }))
 
+  // Running AR balance per invoice row (cumulative sum of remaining)
+  let run = 0
+  for (const inv of displayInvoices) { run += inv.remaining; inv.running = run }
+
   // Reconciliation figures
   const sumInvAmt = displayInvoices.reduce((s,inv) => s + inv.amount, 0)
   const sumPayAmt = payments.reduce((s,p) => s + p.amount, 0)
@@ -384,7 +389,12 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const expectedOutstanding = beginningBalance + sumInvAmt - sumPayAmt
   const reconcile = { beginningBalance, sumInvoices: sumInvAmt, sumPayments: sumPayAmt, expectedOutstanding, computedOutstanding, delta: computedOutstanding - expectedOutstanding }
 
-  try { (globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile } } catch {}
+  // Debug: pay type distribution and reconcile snapshot
+  try {
+    const payTypes: Record<string, number> = {}
+    for (const p of payments) { const k = String(p.payType || ''); payTypes[k] = (payTypes[k] || 0) + 1 }
+    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes }
+  } catch {}
 
   return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile }
 }

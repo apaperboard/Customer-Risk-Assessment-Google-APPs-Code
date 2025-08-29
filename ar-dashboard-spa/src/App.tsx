@@ -198,7 +198,7 @@ export default function App() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  {['Invoice Date','Invoice No','Type','Amount','Closing Date','Term (Days)','Due Date','Days to Pay','Days After Due','Remaining'].map(h => (
+                  {['Invoice Date','Invoice No','Type','Amount','Closing Date','Term (Days)','Due Date','Days to Pay','Days After Due','Remaining','AR Balance'].map(h => (
                     <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
                   ))}
                 </tr>
@@ -222,6 +222,7 @@ export default function App() {
                       <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{typeof daysToPay === 'number' ? daysToPay.toLocaleString() : ''}</td>
                       <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{typeof daysAfterDue === 'number' ? daysAfterDue.toLocaleString() : ''}</td>
                       <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.remaining.toLocaleString()}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(inv.running ?? 0).toLocaleString()}</td>
                     </tr>
                   )
                 })}
