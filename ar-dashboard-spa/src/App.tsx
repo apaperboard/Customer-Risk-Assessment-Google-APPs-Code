@@ -29,6 +29,49 @@ export default function App() {
     return analyze(model.invoices, model.payments, start, bb)
   }, [upload, beginBal])
 
+  const exportToExcel = () => {
+    if (!result || 'error' in result) return
+    const wb = XLSX.utils.book_new()
+
+    const metricsRows = result.metrics.map(m => ({ Metric: m.label, Value: m.value, Assessment: m.assess }))
+    const wsMetrics = XLSX.utils.json_to_sheet(metricsRows)
+    XLSX.utils.book_append_sheet(wb, wsMetrics, 'Metrics')
+
+    const agingLabels = ['0-30 days','31-60 days','61-90 days','91+ days']
+    const agingRows = agingLabels.map((lbl, i) => ({ Bucket: lbl, Outstanding: result.aging[i] }))
+    const wsAging = XLSX.utils.json_to_sheet(agingRows)
+    XLSX.utils.book_append_sheet(wb, wsAging, 'Aging')
+
+    const analysisRows = result.invoices.map(inv => {
+      const closing = inv.paid && inv.closingDate ? inv.closingDate : null
+      const daysToPay = closing ? Math.round(((+closing) - (+inv.invoiceDate))/86400000) : ''
+      const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
+      const daysAfterDue = typeof daysToPay === 'number' ? (daysToPay - inv.term) : ''
+      const fmtDate = (d: Date | null) => d ? new Date(d).toLocaleDateString() : ''
+      return {
+        'Invoice Date': fmtDate(inv.invoiceDate),
+        'Invoice No': inv.invoiceNum || '',
+        'Type': inv.type || '',
+        'Amount': inv.amount,
+        'Closing Date': fmtDate(closing as any),
+        'Term (Days)': inv.term,
+        'Due Date': inv.paid ? fmtDate(dueDate) : '',
+        'Days to Pay': typeof daysToPay === 'number' ? daysToPay : '',
+        'Days After Due': typeof daysAfterDue === 'number' ? daysAfterDue : '',
+        'Remaining': inv.remaining,
+      }
+    })
+    const wsAnalysis = XLSX.utils.json_to_sheet(analysisRows)
+    XLSX.utils.book_append_sheet(wb, wsAnalysis, 'Analysis')
+
+    const trendRows = result.months.map(m => ({ Month: new Date(m.dt).toLocaleDateString(), 'Avg Days to Pay': m.avg }))
+    const wsTrend = XLSX.utils.json_to_sheet(trendRows)
+    XLSX.utils.book_append_sheet(wb, wsTrend, 'Trend')
+
+    const base = upload?.filename ? upload.filename.replace(/\.[^.]+$/, '') : 'export'
+    XLSX.writeFile(wb, `${base}-ar-analysis.xlsx`)
+  }
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }}>
       <h1>AR Analysis Dashboard (Client-side)</h1>
@@ -44,6 +87,15 @@ export default function App() {
         <span>{upload ? upload.filename : 'No file selected'}</span>
         <div>|</div>
         <label>Beginning Balance (TRY): <input value={beginBal} onChange={e => setBeginBal(e.target.value)} style={{ width: 120 }} /></label>
+        <div>|</div>
+        <button
+          onClick={exportToExcel}
+          title="Export analysis to Excel"
+          disabled={!result || ('error' in (result as any))}
+          style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: (!result || ('error' in (result as any))) ? 'not-allowed' : 'pointer', background: '#f0f9ff', opacity: (!result || ('error' in (result as any))) ? 0.6 : 1 }}
+        >
+          Export Excel
+        </button>
       </div>
 
       {result && 'error' in result && (
