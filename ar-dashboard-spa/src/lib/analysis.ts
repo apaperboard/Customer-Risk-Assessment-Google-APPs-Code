@@ -21,6 +21,7 @@ export type Payment = {
   maturityDate: Date | null
   payType: string
   expectedTerm: number | null
+  desc?: string
 }
 
 export type ParsedInput = {
@@ -204,6 +205,7 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
         maturityDate: maturity,
         payType: effectiveType,
         expectedTerm: norm.termDays,
+        desc: descAll,
       })
       try {
         const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
@@ -440,5 +442,24 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied }
   } catch {}
 
-  return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile }
+  // Build Ledger (date-ordered invoices + payments + prepayments + opening)
+  type LedgerItem = { date: Date; kind: 'Opening'|'Invoice'|'Payment'|'Prepayment'; description: string; ref?: string; debit: number; credit: number; balance: number }
+  const combined: { date: Date; kind: LedgerItem['kind']; amount: number; description: string; ref?: string }[] = []
+  for (const inv of invoices) {
+    const kind: LedgerItem['kind'] = inv._synthetic && inv.type === 'Opening' ? 'Opening' : (inv.type === 'Prepayment' ? 'Prepayment' : 'Invoice')
+    combined.push({ date: inv.invoiceDate, kind, amount: inv.amount, description: inv.type, ref: inv.invoiceNum })
+  }
+  for (const p of payments) {
+    combined.push({ date: p.paymentDate, kind: 'Payment', amount: p.amount, description: p.desc ? p.desc : p.payType || 'Payment' })
+  }
+  combined.sort((a,b) => +a.date - +b.date)
+  const ledger: LedgerItem[] = []
+  let bal = 0
+  for (const it of combined) {
+    if (it.kind === 'Payment') { bal -= it.amount; ledger.push({ date: it.date, kind: it.kind, description: it.description, debit: 0, credit: it.amount, balance: bal }) }
+    else if (it.kind === 'Prepayment') { bal += it.amount; const credit = it.amount < 0 ? -it.amount : 0; const debit = it.amount > 0 ? it.amount : 0; ledger.push({ date: it.date, kind: it.kind, description: it.description, debit, credit, balance: bal }) }
+    else { bal += it.amount; ledger.push({ date: it.date, kind: it.kind, description: it.description, ref: it.ref, debit: it.amount, credit: 0, balance: bal }) }
+  }
+
+  return { invoices: displayInvoices, metrics, aging, months, startDate, reconcile, ledger }
 }

@@ -229,6 +229,32 @@ export default function App() {
               </tbody>
             </table>
           </div>
+
+          <div style={{ gridColumn: '1 / span 2' }}>
+            <h2>Ledger</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Date','Type','Description','Ref','Debit','Credit','Running Balance'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(result.ledger || []).map((e: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{new Date(e.date).toLocaleDateString()}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.kind}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.description}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.ref || ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.debit ? e.debit.toLocaleString() : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.credit ? e.credit.toLocaleString() : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.balance.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
       {toast && (
