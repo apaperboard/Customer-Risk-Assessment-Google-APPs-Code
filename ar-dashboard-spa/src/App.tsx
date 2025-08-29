@@ -12,6 +12,7 @@ export default function App() {
   const [upload, setUpload] = useState<UploadState>(null)
   const [beginBal, setBeginBal] = useState<string>('0')
   const [toast, setToast] = useState<string | null>(null)
+  const [showDebug, setShowDebug] = useState<boolean>(false)
 
   const onFile = async (f: File) => {
     console.log('[upload] file selected:', f.name, f.size)
@@ -123,9 +124,18 @@ export default function App() {
           Export Excel
         </button>
       </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <button onClick={() => setShowDebug(v => !v)} style={{ border: '1px solid #ccc', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', background: '#f6f6f6' }}>
+          {showDebug ? 'Hide Debug' : 'Show Debug'}
+        </button>
+      </div>
 
       {result && 'error' in result && (
         <div style={{ color: 'crimson' }}>{result.error}</div>
+      )}
+
+      {showDebug && (
+        <DebugPanel />
       )}
 
       {result && !('error' in result) && (
@@ -225,6 +235,46 @@ export default function App() {
           {toast}
         </div>
       )}
+    </div>
+  )
+}
+
+function DebugPanel() {
+  // Read from global debug object populated by importer/analysis
+  const dbg: any = (globalThis as any).__arDebug || {}
+  const headersLower: string[] = dbg.headersLower || []
+  const descColsHeaders: string[] = dbg.descColsHeaders || []
+  const cPayTpIndex: number | undefined = dbg.cPayTpIndex
+  const cMaturityIndex: number | undefined = dbg.cMaturityIndex
+  const checkInspect: any[] = dbg.checkInspect || []
+  const checkNoMatExamples: any[] = dbg.checkNoMatExamples || []
+  const withMat = checkInspect.filter(x => !!x.maturity).length
+  const withoutMat = checkInspect.length - withMat
+
+  return (
+    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fffef8', marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Debug Summary</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', rowGap: 6, columnGap: 8 }}>
+        <div>Headers (lower):</div>
+        <div>{headersLower.join(', ') || 'n/a'}</div>
+        <div>Description columns:</div>
+        <div>{descColsHeaders.join(', ') || 'n/a'}</div>
+        <div>Pay Type column index:</div>
+        <div>{typeof cPayTpIndex === 'number' ? String(cPayTpIndex) : 'n/a'}</div>
+        <div>Maturity column index:</div>
+        <div>{typeof cMaturityIndex === 'number' ? String(cMaturityIndex) : 'n/a'}</div>
+        <div>Checks parsed (with/without maturity):</div>
+        <div>{withMat} / {withoutMat}</div>
+        {checkNoMatExamples.length > 0 && (
+          <>
+            <div>First no-maturity example:</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{String(checkNoMatExamples[0]?.desc || '').slice(0, 200)}</div>
+          </>
+        )}
+      </div>
+      <div style={{ marginTop: 8, color: '#666' }}>
+        Full details available in Console via window.__arDebug
+      </div>
     </div>
   )
 }

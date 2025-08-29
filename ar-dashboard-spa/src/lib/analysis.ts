@@ -101,6 +101,15 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
 
   try {
     console.debug('[parseRowsToModel] header mapping:', { headers, cCredit, cDebit, cDesc, cDate, cPayTp, cMaturity })
+    const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+    dbg.cPayTpIndex = cPayTp
+    dbg.cMaturityIndex = cMaturity
+    dbg.descColsHeaders = ((): string[] => {
+      const out: string[] = []
+      const uniq = new Set<number>(descCols.length ? descCols : (cDesc > 0 ? [cDesc] : []))
+      for (const ci of uniq) out.push(headers[ci-1])
+      return out
+    })()
   } catch {}
 
   function get(row: RowObject, col: number): any {
