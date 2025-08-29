@@ -68,12 +68,37 @@ export function amountToNumber(v: any): number {
 export function extractDateFromText(s: any): Date | null {
   if (!s) return null
   const str = normalizeDigits(String(s))
-  const re = /(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/
-  const m = str.match(re)
-  if (!m) return null
-  let y = String(m[3])
-  if (y.length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
-  return parseDMY(m[1] + '/' + m[2] + '/' + y)
+  // 1) dd/mm/yyyy or dd.mm.yyyy or dd-mm-yy
+  let m = str.match(/(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/)
+  if (m) {
+    let y = String(m[3])
+    if (y.length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
+    return parseDMY(m[1] + '/' + m[2] + '/' + y)
+  }
+  // 2) yyyy-mm-dd or yyyy/mm/dd
+  m = str.match(/\b(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\b/)
+  if (m) {
+    const y = Number(m[1]), mm = Number(m[2]), dd = Number(m[3])
+    const dt = new Date(y, mm - 1, dd)
+    return isNaN(+dt) ? null : dt
+  }
+  // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR)
+  const monthMap: Record<string, number> = {
+    jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
+    ocak:1,şubat:2,subat:2,mart:3,nisan:4,mayıs:5,mayis:5,haziran:6,temmuz:7,ağustos:8,agustos:8,eylül:9,eylul:9,ekim:10,kasım:11,kasim:11,aralık:12,aralik:12
+  }
+  m = str.toLowerCase().match(/\b(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{2,4})\b/)
+  if (m) {
+    const dd = Number(m[1]); const key = m[2].normalize('NFC')
+    const mm = monthMap[key as keyof typeof monthMap]
+    let y = m[3]; if (y.length === '2') y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
+    const yyyy = Number(y)
+    if (mm) {
+      const dt = new Date(yyyy, mm - 1, dd)
+      return isNaN(+dt) ? null : dt
+    }
+  }
+  return null
 }
 
 export function lc(s: any): string {
@@ -101,4 +126,3 @@ export function mode(arr: Array<number | null | undefined>, def: number): number
   }
   return best ?? def
 }
-

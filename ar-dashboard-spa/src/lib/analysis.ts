@@ -175,13 +175,21 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       if (!date) continue
       const payTypeRaw = get(row, cPayTp) || desc
       const norm = normalizePayType(payTypeRaw)
+      const maturity = parseDMY(get(row, cMaturity)) || extractDateFromText(desc) || null
       payments.push({
         paymentDate: date,
         amount: invoiceFromDebit ? credit : debit,
-        maturityDate: parseDMY(get(row, cMaturity)) || extractDateFromText(desc) || null,
+        maturityDate: maturity,
         payType: norm.type,
         expectedTerm: norm.termDays,
       })
+      try {
+        if (norm.type === 'Check' && !maturity) {
+          const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+          const arr = (dbg.checkNoMatExamples ||= [])
+          if (arr.length < 10) arr.push({ date, payTypeRaw, desc })
+        }
+      } catch {}
       if (!firstTransactionDate || +date < +firstTransactionDate) firstTransactionDate = date
     }
   }
