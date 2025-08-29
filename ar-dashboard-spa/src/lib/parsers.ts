@@ -13,6 +13,23 @@ export function normalizeDigits(v: any): string {
   return out
 }
 
+function makeDateClamped(yyyy: number, mm: number, dd: number): Date {
+  // mm is 1-based month
+  const dt = new Date(yyyy, mm - 1, dd)
+  if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) return dt
+  const dim = new Date(yyyy, mm, 0).getDate()
+  const dd2 = Math.min(dd, dim)
+  const dt2 = new Date(yyyy, mm - 1, dd2)
+  try {
+    const dbg: any = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+    const arr = (dbg.dateClampedSamples ||= [])
+    const from = `${dd}/${mm}/${yyyy}`
+    const to = `${dd2}/${mm}/${yyyy}`
+    if (arr.length < 5) arr.push({ from, to })
+  } catch {}
+  return dt2
+}
+
 export function parseDMY(v: any): Date | null {
   if (v == null || v === '') return null
   if (v instanceof Date && !isNaN(+v)) return v
@@ -37,9 +54,7 @@ export function parseDMY(v: any): Date | null {
     yyyy = Number(yRaw)
   }
   if (!isFinite(yyyy)) return null
-  const dt = new Date(yyyy, mm - 1, dd)
-  if (dt.getFullYear() !== yyyy || dt.getMonth() !== (mm - 1) || dt.getDate() !== dd) return null
-  return dt
+  return makeDateClamped(yyyy, mm, dd)
 }
 
 export function daysBetween(a: any, b: any): number {
@@ -96,8 +111,7 @@ export function extractDateFromText(s: any): Date | null {
   while ((mmatch = re2.exec(str)) !== null) last = mmatch
   if (last) {
     const y = Number(last[1]), mm = Number(last[2]), dd = Number(last[3])
-    const dt = new Date(y, mm - 1, dd)
-    return isNaN(+dt) ? null : dt
+    return makeDateClamped(y, mm, dd)
   }
   // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR) (take last match)
   const monthMap: Record<string, number> = {
@@ -113,8 +127,7 @@ export function extractDateFromText(s: any): Date | null {
     let y = last[3]; if ((y as string).length === 2) y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
     const yyyy = Number(y)
     if (mm) {
-      const dt = new Date(yyyy, mm - 1, dd)
-      return isNaN(+dt) ? null : dt
+      return makeDateClamped(yyyy, mm, dd)
     }
   }
   return null
