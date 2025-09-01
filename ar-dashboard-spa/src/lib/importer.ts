@@ -89,7 +89,8 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
   const lower = origHeaders.map(h => h.toLowerCase())
   const idxOf = (aliases: string[]) => {
     for (let i = 0; i < lower.length; i++) {
-      for (const a of aliases) { if (lower[i].includes(a)) return i }
+      const val = String(lower[i] ?? '')
+      for (const a of aliases) { const aa = String(a ?? ''); if (aa && val.includes(aa)) return i }
     }
     return -1
   }
@@ -146,7 +147,8 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
   const headersLowerPreface = (grid[headerRowIdx] || []).map((h:any)=>String(h??'').toLowerCase())
   const idxOfPref = (aliases: string[]) => {
     for (let i = 0; i < headersLowerPreface.length; i++) {
-      for (const a of aliases) { if (headersLowerPreface[i].includes(a)) return i }
+      const val = String(headersLowerPreface[i] ?? '')
+      for (const a of aliases) { const aa = String(a ?? ''); if (aa && val.includes(aa)) return i }
     }
     return -1
   }

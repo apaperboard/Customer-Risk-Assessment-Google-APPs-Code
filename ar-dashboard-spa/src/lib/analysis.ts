@@ -42,20 +42,22 @@ export function findCol(headers: string[], names: string[]): number {
 }
 
 function findByIncludes(headers: string[], names: string[]): number {
-  const lower = headers.map(h => h.toLowerCase())
+  const lower = headers.map(h => String(h ?? '').toLowerCase())
   for (let i = 0; i < lower.length; i++) {
     const h = lower[i]
-    for (const n of names) { if (h.includes(n.toLowerCase())) return i + 1 }
+    if (!h) continue
+    for (const n of names) { const nn = String(n ?? '').toLowerCase(); if (nn && h.includes(nn)) return i + 1 }
   }
   return -1
 }
 
 function findAllByIncludes(headers: string[], names: string[]): number[] {
-  const lower = headers.map(h => h.toLowerCase())
+  const lower = headers.map(h => String(h ?? '').toLowerCase())
   const out: number[] = []
   for (let i = 0; i < lower.length; i++) {
     const h = lower[i]
-    for (const n of names) { if (h.includes(n.toLowerCase())) { out.push(i + 1); break } }
+    if (!h) continue
+    for (const n of names) { const nn = String(n ?? '').toLowerCase(); if (nn && h.includes(nn)) { out.push(i + 1); break } }
   }
   return out
 }
