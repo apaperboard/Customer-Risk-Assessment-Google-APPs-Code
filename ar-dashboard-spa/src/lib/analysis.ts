@@ -410,7 +410,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const baseMult = (mostCommonTerm === 90)
     ? (riskBand === 'Good' ? 3.0 : (riskBand === 'Average' ? 2.75 : 2.5))
     : (riskBand === 'Good' ? 2.0 : (riskBand === 'Average' ? 1.5 : 1.0))
-  const creditLimit: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMult) : ''
+  let creditLimit: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMult) : ''
+  if (creditLimit !== '' && isFinite(creditLimit as number)) {
+    // Round up to nearest 10,000
+    creditLimit = Math.ceil((creditLimit as number) / 10000) * 10000
+  }
 
   // Checks-only: % of checks where maturity duration exceeds expected term
   const pctChecksOverTerm: number | '' = maturitySamples.length
@@ -440,7 +444,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Avg Maturity Over By (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
   metrics.push({ label: '% of Checks Over Term', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
   metrics.push({ label: '% of Payments Delivered After Term', value: pctPaymentsDeliveredAfterTerm, assess: assessLower(pctPaymentsDeliveredAfterTerm, 0.30, 0.60) })
-  metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: '' })
+  metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
   // Include purchases and credit limit like original Apps Script
   metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
   metrics.push({ label: 'Credit Limit (TRY)', value: creditLimit, assess: '' })

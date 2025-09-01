@@ -71,6 +71,15 @@ export default function App() {
     ar: { Good: 'جيد', Average: 'متوسط', Poor: 'ضعيف' }
   }
 
+  // Metric notes (tooltips in UI)
+  const metricNotes: Record<string, string> = {
+    '% of Checks Over Term': 'Checks with maturity duration greater than expected term divided by total checks with maturity.',
+    '% of Payments Delivered After Term': 'Share of paid invoices where (payment date - invoice date) exceeds the invoice term; all payment types.',
+    'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.',
+    'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
+    'Credit Limit (TRY)': 'Average monthly purchases x risk/term multiplier; rounded up to the nearest 10,000.'
+  }
+
   const onFile = async (f: File) => {
     console.log('[upload] file selected:', f.name, f.size)
     const buf = await f.arrayBuffer()
@@ -218,7 +227,10 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {result.metrics.map((m, i) => {
+                {(() => {
+                  const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
+                  const sepIndex = result.metrics.findIndex(mm => specialLabels.has(mm.label))
+                  return result.metrics.map((m, i) => {
                   const isPct = m.label.includes('%')
                   const isDays = m.label.toLowerCase().includes('day')
                   const fmt = (v: any) => {
@@ -230,14 +242,23 @@ export default function App() {
                   const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
                   const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
                   const assessLocal = assessNames[lang][m.assess] ?? m.assess
+                  const note = metricNotes[m.label] || ''
                   return (
-                    <tr key={i}>
-                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
-                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{fmt(m.value)}</td>
-                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{assessLocal}</td>
-                    </tr>
+                    <React.Fragment key={i}>
+                      {i === sepIndex && (
+                        <tr>
+                          <td colSpan={3} style={{ borderTop: '2px solid #ddd', padding: 0 }}></td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{fmt(m.value)}</td>
+                        <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{assessLocal}</td>
+                      </tr>
+                    </React.Fragment>
                   )
-                })}
+                })
+                })()}
               </tbody>
             </table>
           </div>
