@@ -229,35 +229,65 @@ export default function App() {
               <tbody>
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
-                  const sepIndex = result.metrics.findIndex(mm => specialLabels.has(mm.label))
-                  return result.metrics.map((m, i) => {
-                  const isPct = m.label.includes('%')
-                  const isDays = m.label.toLowerCase().includes('day')
-                  const fmt = (v: any) => {
-                    if (v === '') return ''
-                    if (isPct) return (v as number).toLocaleString(undefined, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
-                    if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                    return String(v)
-                  }
-                  const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
-                  const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
-                  const assessLocal = assessNames[lang][m.assess] ?? m.assess
-                  const note = metricNotes[m.label] || ''
-                  return (
-                    <React.Fragment key={i}>
-                      {i === sepIndex && (
-                        <tr>
-                          <td colSpan={3} style={{ borderTop: '2px solid #ddd', padding: 0 }}></td>
-                        </tr>
-                      )}
-                      <tr>
+                  const metricsMain = result.metrics.filter(m => !specialLabels.has(m.label))
+                  return metricsMain.map((m, i) => {
+                    const isPct = m.label.includes('%')
+                    const fmt = (v: any) => {
+                      if (v === '') return ''
+                      if (isPct) return (v as number).toLocaleString(undefined, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      return String(v)
+                    }
+                    const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
+                    const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
+                    const assessLocal = assessNames[lang][m.assess] ?? m.assess
+                    const note = metricNotes[m.label] || ''
+                    return (
+                      <tr key={i}>
                         <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
                         <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{fmt(m.value)}</td>
                         <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{assessLocal}</td>
                       </tr>
-                    </React.Fragment>
-                  )
-                })
+                    )
+                  })
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2>Key Account Metrics</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('metric')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('value')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
+                  const items = result.metrics.filter(m => specialLabels.has(m.label))
+                  return items.map((m, i) => {
+                    const isPct = m.label.includes('%')
+                    const fmt = (v: any) => {
+                      if (v === '') return ''
+                      if (isPct) return (v as number).toLocaleString(undefined, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      return String(v)
+                    }
+                    const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
+                    const note = metricNotes[m.label] || ''
+                    const riskColor = m.label === 'Customer Risk Rating'
+                      ? (m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent')
+                      : 'transparent'
+                    return (
+                      <tr key={i}>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right', background: riskColor }}>{fmt(m.value)}</td>
+                      </tr>
+                    )
+                  })
                 })()}
               </tbody>
             </table>
