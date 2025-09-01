@@ -11,6 +11,7 @@ type UploadState = {
 export default function App() {
   const [upload, setUpload] = useState<UploadState>(null)
   const [beginBal, setBeginBal] = useState<string>('0')
+  const [beginBalAuto, setBeginBalAuto] = useState<boolean>(true)
   const [toast, setToast] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState<boolean>(false)
   const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
@@ -103,10 +104,15 @@ export default function App() {
     const { rows, autoBeginBalance } = extractTable(ws)
     console.debug('[upload] rows parsed:', rows.length, 'autoBeginBalance:', autoBeginBalance)
     setUpload({ filename: f.name, rows })
-    if (autoBeginBalance != null && beginBal === '0') {
-      const v = String(autoBeginBalance)
+    if (beginBalAuto) {
+      const v = autoBeginBalance != null ? String(autoBeginBalance) : '0'
+      const prev = beginBal
       setBeginBal(v)
-      setToast(`Opening balance detected: ${Number(v).toLocaleString()} TRY`)
+      if (autoBeginBalance != null) {
+        setToast(`Opening balance detected: ${Number(v).toLocaleString()} TRY`)
+      } else if (prev !== '0') {
+        setToast('No opening balance found. Defaulted to 0.')
+      }
       setTimeout(() => setToast(null), 4000)
     }
   }
@@ -202,7 +208,7 @@ export default function App() {
         </label>
         <span>{upload ? upload.filename : t('noFile')}</span>
         <div>|</div>
-        <label>{t('beginBal')}: <input value={beginBal} onChange={e => setBeginBal(e.target.value)} style={{ width: 120 }} /></label>
+        <label>{t('beginBal')}: <input value={beginBal} onChange={e => { setBeginBal(e.target.value); setBeginBalAuto(false) }} style={{ width: 120 }} /></label>
         <div>|</div>
         <button
           onClick={exportToExcel}
