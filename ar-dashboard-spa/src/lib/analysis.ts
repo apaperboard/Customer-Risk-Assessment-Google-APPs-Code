@@ -92,11 +92,15 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     'نوع الدفع','طريقة الدفع','نوع السداد'
   ]
 
-  const cCredit = findCol(headers, creditNames)
-  const cDebit  = findCol(headers, debitNames)
+  let cCredit = findCol(headers, creditNames)
+  let cDebit  = findCol(headers, debitNames)
   const cDesc   = findCol(headers, descNames)
-  const cDate   = findCol(headers, dateNames)
+  let cDate   = findCol(headers, dateNames)
   const cPayTp  = findCol(headers, payTypeNames)
+  // Fallbacks via substring includes, including Arabic tokens
+  if (cCredit <= 0) cCredit = findByIncludes(headers, ['credit','alacak','invoice','fatura','دائن'])
+  if (cDebit  <= 0) cDebit  = findByIncludes(headers, ['debit','borç','borc','payment','ödeme','odeme','tahsilat','مدين'])
+  if (cDate   <= 0) cDate   = findByIncludes(headers, ['date','tarih','التاريخ'])
   // Heuristic: if pay type column not found, or looks wrong, auto-detect by cell values
   function looksLikePayType(val: any): boolean {
     const s = String(val ?? '').toLowerCase()
