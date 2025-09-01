@@ -65,6 +65,15 @@ export default function App() {
       ar: 'تصنيف مخاطر العميل'
     }
   }
+  // Extra labels added later (override when present)
+  const metricNamesExtra: Record<string, { en: string; tr: string; ar: string }> = {
+    '% of Checks Over Term': { en: '% of Checks Over Term', tr: '% Vadesi Aşılmış Çekler', ar: '% من الشيكات فوق الأجل' },
+    '% of Payments Delivered After Term': { en: '% of Payments Delivered After Term', tr: '% Vadeden Sonra Teslim Edilen Ödemeler', ar: '% المدفوعات بعد الأجل' },
+    'Average Monthly Purchases (TRY)': { en: 'Average Monthly Purchases (TRY)', tr: 'Aylık Ortalama Alımlar (TRY)', ar: 'متوسط المشتريات الشهري (TRY)' },
+    'Credit Limit (TRY)': { en: 'Credit Limit (TRY)', tr: 'Kredi Limiti (TRY)', ar: 'حد الائتمان (TRY)' },
+    'Customer Risk Rating': { en: 'Customer Risk Rating', tr: 'Müşteri Risk Notu', ar: 'تصنيف مخاطر العميل' },
+  }
+  const metricNamesAll = { ...metricNames, ...metricNamesExtra }
   const assessNames: Record<'en'|'tr'|'ar', Record<string,string>> = {
     en: { Good: 'Good', Average: 'Average', Poor: 'Poor' },
     tr: { Good: 'İyi', Average: 'Orta', Poor: 'Zayıf' },
@@ -239,7 +248,7 @@ export default function App() {
                       return String(v)
                     }
                     const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
-                    const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
+                    const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
                     const assessLocal = assessNames[lang][m.assess] ?? m.assess
                     const note = metricNotes[m.label] || ''
                     return (
@@ -276,7 +285,7 @@ export default function App() {
                       if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
                       return String(v)
                     }
-                    const labelLocal = metricNames[m.label] ? metricNames[m.label][lang] : m.label
+                    const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
                     const note = metricNotes[m.label] || ''
                     const riskColor = m.label === 'Customer Risk Rating'
                       ? (m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent')
