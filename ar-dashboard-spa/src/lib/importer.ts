@@ -134,33 +134,50 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
   else headerRowIdx = findHeaderRow(grid)
   const headers = grid[headerRowIdx] || []
 
-  // Preface (above header): try to detect opening balance
+  // Preface (above header): try to detect opening balance cautiously
   let autoBeginBalance: number | undefined
+  // Pre-compute header indices to constrain numeric detection to debit/credit columns only
+  const headersLowerPreface = (grid[headerRowIdx] || []).map((h:any)=>String(h??'').toLowerCase())
+  const idxOfPref = (aliases: string[]) => {
+    for (let i = 0; i < headersLowerPreface.length; i++) {
+      for (const a of aliases) { if (headersLowerPreface[i].includes(a)) return i }
+    }
+    return -1
+  }
+  const iDatePref  = idxOfPref(HEADER_ALIASES.date)
+  const iDebitPref = idxOfPref(HEADER_ALIASES.debit)
+  const iCreditPref= idxOfPref(HEADER_ALIASES.credit)
   for (let i = 0; i < headerRowIdx; i++) {
     const row = grid[i]
     if (!row || row.length === 0) continue
     if (rowHasAny(row, BEGIN_BAL_WORDS)) {
-      // Find the biggest numeric in row
-      let best = NaN
-      for (const cell of row) {
-        const n = amountToNumber(cell)
-        if (isFinite(n) && Math.abs(n) > Math.abs(best || 0)) best = n
-      }
-      if (isFinite(best)) { autoBeginBalance = best; break }
+      // Consider only debit/credit columns for numeric
+      const candidates: number[] = []
+      const pushNum = (idx: number) => { if (idx >= 0 && idx < row.length) { const n = amountToNumber(row[idx]); if (isFinite(n)) candidates.push(n) } }
+      pushNum(iDebitPref); pushNum(iCreditPref)
+      if (candidates.length === 0) continue
+      const best = candidates.reduce((a,b)=> Math.abs(b) > Math.abs(a)? b : a, 0)
+      autoBeginBalance = best
+      break
     }
   }
 
-  // Detect opening/beginning balance row immediately after header
+  // Detect opening/beginning balance row immediately after header (strict rules)
   const possibleBeginRow = grid[headerRowIdx + 1] || []
   const hasBeginKeywords = rowHasAny(possibleBeginRow, BEGIN_BAL_WORDS)
-  const anyDateLike = (possibleBeginRow || []).some(cell => {
-    const s = String(cell ?? '')
-    return /(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2,4})/.test(s)
-  })
-  const numericInRow = (possibleBeginRow || []).map(x => amountToNumber(x)).filter(n => isFinite(n))
-  if (!autoBeginBalance && (hasBeginKeywords || (!anyDateLike && numericInRow.length > 0))) {
-    // choose the largest magnitude number as opening balance
-    autoBeginBalance = numericInRow.reduce((a,b) => Math.abs(b) > Math.abs(a) ? b : a, 0)
+  // Prefer debit/credit cells only; ignore date/other columns to avoid Excel date serials
+  const numsAfterHeader: number[] = []
+  if (iDebitPref >= 0 && iDebitPref < possibleBeginRow.length) {
+    const n = amountToNumber(possibleBeginRow[iDebitPref]); if (isFinite(n)) numsAfterHeader.push(n)
+  }
+  if (iCreditPref >= 0 && iCreditPref < possibleBeginRow.length) {
+    const n = amountToNumber(possibleBeginRow[iCreditPref]); if (isFinite(n)) numsAfterHeader.push(n)
+  }
+  const dateCell = (iDatePref >= 0 && iDatePref < possibleBeginRow.length) ? String(possibleBeginRow[iDatePref] ?? '') : ''
+  const dateLike = /(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2,4})/.test(dateCell)
+  // Criteria: either keywords, or (no date in date column AND there is exactly one numeric in debit/credit)
+  if (!autoBeginBalance && (hasBeginKeywords || (!dateLike && numsAfterHeader.length === 1))) {
+    autoBeginBalance = numsAfterHeader.length ? numsAfterHeader[0] : undefined
   }
 
   // Body rows start after header + possible opening balance row
