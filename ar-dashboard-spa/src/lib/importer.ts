@@ -55,31 +55,48 @@ function rowHasAny(row: any[], words: string[]): boolean {
 function isHeaderCandidate(row: any[]): boolean {
   const r = row.map(lc)
   const joined = ' ' + r.join(' ') + ' '
-  const has = (arr: string[]) => arr.some(k => joined.includes(' ' + k + ' '))
+  const dateAl = ([] as string[]).concat(HEADER_ALIASES.date, ['tarih','tarıh','التاريخ','تاريخ'])
+  const descAl = ([] as string[]).concat(HEADER_ALIASES.desc, ['açıklama','aciklama','البيان','الوصف','ملاحظات'])
+  const debitAl= ([] as string[]).concat(HEADER_ALIASES.debit, ['borç','borc','ödeme','odeme','tahsilat','payment','مدين'])
+  const creditAl=([] as string[]).concat(HEADER_ALIASES.credit, ['alacak','invoice','fatura','دائن'])
+  const has = (arr: string[]) => arr.some(k => k && joined.includes(' ' + lc(k) + ' '))
   const nonEmpty = r.filter(x => x && x.trim().length > 0).length
+  const numericish = r.filter(x => /^\d{4,}$/.test(x || '')).length
   let score = 0
-  if (has(HEADER_ALIASES.date)) score += 2
-  if (has(HEADER_ALIASES.desc)) score += 2
-  if (has(HEADER_ALIASES.debit)) score += 1
-  if (has(HEADER_ALIASES.credit)) score += 1
+  if (has(dateAl)) score += 2
+  if (has(descAl)) score += 2
+  if (has(debitAl)) score += 1
+  if (has(creditAl)) score += 1
   if (nonEmpty >= 3) score += 1
+  // Penalize rows dominated by numeric tokens
+  if (numericish >= Math.max(3, Math.floor(r.length * 0.5))) score -= 2
   return score >= 3
 }
 
 function findHeaderRow(grid: any[][]): number {
   let bestIdx = -1, bestScore = -1
-  for (let i = 0; i < grid.length; i++) {
+  const dateAl = ([] as string[]).concat(HEADER_ALIASES.date, ['tarih','tarıh','التاريخ','تاريخ'])
+  const descAl = ([] as string[]).concat(HEADER_ALIASES.desc, ['açıklama','aciklama','البيان','الوصف','ملاحظات'])
+  const debitAl= ([] as string[]).concat(HEADER_ALIASES.debit, ['borç','borc','ödeme','odeme','tahsilat','payment','مدين'])
+  const creditAl=([] as string[]).concat(HEADER_ALIASES.credit, ['alacak','invoice','fatura','دائن'])
+  for (let i = 0; i < Math.min(grid.length, 15); i++) {
     const row = grid[i].map(lc)
     // Score headers by presence of key tokens
     let score = 0
     const joined = ' ' + row.join(' ') + ' '
-    const has = (arr: string[]) => arr.some(k => joined.includes(' ' + k + ' '))
-    if (has(HEADER_ALIASES.date)) score += 2
-    if (has(HEADER_ALIASES.desc)) score += 2
-    if (has(HEADER_ALIASES.debit)) score += 1
-    if (has(HEADER_ALIASES.credit)) score += 1
+    const has = (arr: string[]) => arr.some(k => k && joined.includes(' ' + lc(k) + ' '))
+    if (has(dateAl)) score += 2
+    if (has(descAl)) score += 2
+    if (has(debitAl)) score += 1
+    if (has(creditAl)) score += 1
     if (row.filter(c => c).length >= 3) score += 1
+    const numericish = row.filter(x => /^\d{4,}$/.test(x || '')).length
+    if (numericish >= Math.max(3, Math.floor(row.length * 0.5))) score -= 2
     if (score > bestScore) { bestScore = score; bestIdx = i }
+  }
+  // Fallback: favor the first row among the first 5 that matches candidate rules
+  if (bestIdx < 0) {
+    for (let i = 0; i < Math.min(grid.length, 5); i++) if (isHeaderCandidate(grid[i])) return i
   }
   return bestIdx >= 0 ? bestIdx : 0
 }
