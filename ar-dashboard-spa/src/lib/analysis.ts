@@ -412,6 +412,19 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     : (riskBand === 'Good' ? 2.0 : (riskBand === 'Average' ? 1.5 : 1.0))
   const creditLimit: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMult) : ''
 
+  // Checks-only: % of checks where maturity duration exceeds expected term
+  const pctChecksOverTerm: number | '' = maturitySamples.length
+    ? (maturitySamples.filter(m => m.days > m.expected).length / maturitySamples.length)
+    : ''
+
+  // All payment types: % of invoices delivered (closed) after their term using handover lag
+  const pctPaymentsDeliveredAfterTerm: number | '' = paid.length
+    ? (paid.filter(inv => {
+        const d2p = Math.round(((+inv.closingDate!) - (+inv.invoiceDate)) / 86400000)
+        return d2p > inv.term
+      }).length / paid.length)
+    : ''
+
   // Metrics rows
   function assessLower(val: any, goodMax: number, avgMax: number) {
     if (val === '') return ''
@@ -425,7 +438,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Blended Average Days to Pay', value: roundDays(blendedDaysToPay), assess: assessLower(blendedDaysToPay, 15, 50) })
   metrics.push({ label: 'Average Check Maturity Duration (Days)', value: roundDays(avgCheckMaturityDuration), assess: '' })
   metrics.push({ label: 'Avg Maturity Over By (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
-  metrics.push({ label: '% of Payments Over Term', value: pctChecksHandedOver30, assess: assessLower(pctChecksHandedOver30, 0.30, 0.60) })
+  metrics.push({ label: '% of Checks Over Term', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
+  metrics.push({ label: '% of Payments Delivered After Term', value: pctPaymentsDeliveredAfterTerm, assess: assessLower(pctPaymentsDeliveredAfterTerm, 0.30, 0.60) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: '' })
   // Include purchases and credit limit like original Apps Script
   metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
