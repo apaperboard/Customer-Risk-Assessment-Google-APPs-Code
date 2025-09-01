@@ -86,7 +86,7 @@ function findHeaderRow(grid: any[][]): number {
 
 function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
   const origHeaders = headers.map((h: any) => String(h ?? '').trim())
-  const lower = origHeaders.map(h => h.toLowerCase())
+  const lower = origHeaders.map(h => String(h ?? '').toLowerCase())
   const idxOf = (aliases: string[]) => {
     for (let i = 0; i < lower.length; i++) {
       const val = String(lower[i] ?? '')
@@ -103,7 +103,7 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
   const descCandidateIdx: number[] = []
   for (let i = 0; i < lower.length; i++) {
     const h = lower[i]
-    if (HEADER_ALIASES.desc.some(a => h.includes(a))) descCandidateIdx.push(i)
+    if (h && HEADER_ALIASES.desc.some(a => h.includes(a))) descCandidateIdx.push(i)
   }
 
   return rows.map(r => {
