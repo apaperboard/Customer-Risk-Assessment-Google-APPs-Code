@@ -95,6 +95,54 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
   const cDesc   = findCol(headers, descNames)
   const cDate   = findCol(headers, dateNames)
   const cPayTp  = findCol(headers, payTypeNames)
+  // Heuristic: if pay type column not found, or looks wrong, auto-detect by cell values
+  function looksLikePayType(val: any): boolean {
+    const s = String(val ?? '').toLowerCase()
+    if (!s) return false
+    return /(\bkk\b|k\.k\.|kredi\s*kart|kart|credit\s*card|visa|master|peşin|pesin|nakit|cash|çek|cek|cheque|check|senet)/i.test(s)
+  }
+  function detectPayTypeColumn(): number {
+    const n = headers.length
+    let bestIdx = -1, bestScore = 0, bestRatio = 0
+    const sampleCount = Math.min(rows.length, 500)
+    for (let i = 1; i <= n; i++) {
+      let total = 0, match = 0, numericLike = 0
+      for (let r = 0; r < sampleCount; r++) {
+        const v = get(rows[r] as any, i)
+        if (v == null || String(v).trim() === '') continue
+        total++
+        if (typeof v === 'number') { numericLike++ }
+        if (looksLikePayType(v)) match++
+      }
+      if (total === 0) continue
+      if (numericLike/Math.max(total,1) > 0.7) continue
+      const ratio = match/total
+      if (match > bestScore || (match === bestScore && ratio > bestRatio)) { bestIdx = i; bestScore = match; bestRatio = ratio }
+    }
+    if (bestScore >= 3 && bestRatio >= 0.10) return bestIdx
+    return -1
+  }
+  let cPayTpEff = cPayTp
+  function payTypeScoreFor(col: number): {match:number, total:number} {
+    if (col <= 0) return { match: 0, total: 0 }
+    let match = 0, total = 0
+    const sampleCount = Math.min(rows.length, 300)
+    for (let r = 0; r < sampleCount; r++) {
+      const v = get(rows[r] as any, col)
+      if (v == null || String(v).trim() === '') continue
+      total++
+      if (looksLikePayType(v)) match++
+    }
+    return { match, total }
+  }
+  const cur = payTypeScoreFor(cPayTp)
+  if (cPayTp <= 0 || cur.match < 3 || (cur.total > 0 && (cur.match/cur.total) < 0.10)) {
+    const autoCol = detectPayTypeColumn()
+    if (autoCol > 0) {
+      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.cPayTpIndexAuto = autoCol } catch {}
+      cPayTpEff = autoCol
+    }
+  }
   // Additional helpers via substring match (handles mixed-language headers and composite labels)
   const cMaturity = findByIncludes(headers, ['vade', 'vade tarihi', 'maturity', 'maturity date', 'due date', 'son ödeme', 'son odeme', 'vadesi'])
   const descCols  = Array.from(new Set([
@@ -193,7 +241,7 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
         if (parts.length === 0) parts.push(String(desc ?? ''))
         return parts.join(' | ')
       })()
-      const payTypeRaw = (() => { const pt = get(row, cPayTp); return pt ? (String(pt) + ' | ' + descAll) : descAll })()
+      const payTypeRaw = (() => { const pt = get(row, cPayTpEff); return pt ? (String(pt) + ' | ' + descAll) : descAll })()
       const norm = normalizePayType(payTypeRaw)
       const descDate = extractDateFromText(descAll)
       const maturity = parseDMY(get(row, cMaturity)) || descDate || null
