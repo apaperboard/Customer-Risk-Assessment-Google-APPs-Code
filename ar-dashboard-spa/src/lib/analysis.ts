@@ -375,6 +375,10 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       rem -= applied
       // advance has zero lag contribution (payment precedes invoice)
       allLagTotalAmt += applied
+      // propagate expected term from advance to the invoice (was missing)
+      if (adv.expectedTerm != null) {
+        (inv._appliedTerms ||= []).push(adv.expectedTerm)
+      }
       // track check-specific if advance came from a check
       if (adv.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null })
