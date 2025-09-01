@@ -94,11 +94,16 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
     }
     return -1
   }
-  const iDate = idxOf(HEADER_ALIASES.date)
-  const iDesc = idxOf(HEADER_ALIASES.desc)
-  const iDebit = idxOf(HEADER_ALIASES.debit)
-  const iCredit= idxOf(HEADER_ALIASES.credit)
-  const iPayTp = idxOf(HEADER_ALIASES.paytype)
+  const dateAliases  = ([] as string[]).concat(HEADER_ALIASES.date, ['tarih','tarıh','التاريخ','تاريخ'])
+  const descAliases  = ([] as string[]).concat(HEADER_ALIASES.desc, ['açıklama','aciklama','البيان','الوصف','ملاحظات'])
+  const debitAliases = ([] as string[]).concat(HEADER_ALIASES.debit, ['borç','borc','ödeme','odeme','tahsilat','payment','مدين'])
+  const creditAliases= ([] as string[]).concat(HEADER_ALIASES.credit, ['alacak','invoice','fatura','دائن'])
+  const paytpAliases = ([] as string[]).concat(HEADER_ALIASES.paytype, ['proje','projekt','المشروع','مشروع'])
+  const iDate = idxOf(dateAliases)
+  const iDesc = idxOf(descAliases)
+  const iDebit = idxOf(debitAliases)
+  const iCredit= idxOf(creditAliases)
+  const iPayTp = idxOf(paytpAliases)
   // Additional: collect all description-like columns to prioritize non-empty text
   const descCandidateIdx: number[] = []
   for (let i = 0; i < lower.length; i++) {
