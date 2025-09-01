@@ -339,7 +339,9 @@ export default function App() {
           </div>
 
           <div style={{ gridColumn: '1 / span 2' }}>
-            <h2>{t('analysisTable')}</h2>
+            <details>
+              <summary style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, fontSize: 20, marginBottom: 8 }}>{t('analysisTable')}</summary>
+              <div style={{ marginTop: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -373,10 +375,14 @@ export default function App() {
                 })}
               </tbody>
             </table>
+              </div>
+            </details>
           </div>
 
           <div style={{ gridColumn: '1 / span 2' }}>
-            <h2>{t('ledger')}</h2>
+            <details>
+              <summary style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, fontSize: 20, marginBottom: 8 }}>{t('ledger')}</summary>
+              <div style={{ marginTop: 8 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -399,6 +405,8 @@ export default function App() {
                 ))}
               </tbody>
             </table>
+              </div>
+            </details>
           </div>
         </div>
       )}
