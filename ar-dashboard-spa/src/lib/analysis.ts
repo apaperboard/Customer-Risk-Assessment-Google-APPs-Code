@@ -377,6 +377,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : ''
   const avgCheckMaturityOverBy = (avgCheckMaturityDuration !== '') ? ((avgCheckMaturityDuration as number) - 90) : ''
 
+  // Avg Monthly Purchases (from analysis period start)
+  const totalInvoicedInPeriod = displayInvoices.reduce((s, inv) => s + inv.amount, 0)
+  const monthsInPeriod = startDate ? ((+today - +startDate) / (86400000 * 30.44)) : 0
+  const avgMonthlyPurchases: number | '' = (monthsInPeriod > 0) ? (totalInvoicedInPeriod / monthsInPeriod) : ''
+
   // Score (weighted)
   function compLowerBetter(val: any, goodMax: number, avgMax: number) {
     if (val === '') return null
@@ -393,6 +398,20 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
+  // Estimate customer credit limit based on risk band and most common term
+  const maturitySamples: { days: number; expected: number }[] = []
+  for (const p of payments) {
+    if (p.maturityDate) {
+      const d = Math.round((+p.maturityDate - +p.paymentDate) / 86400000)
+      if (isFinite(d) && d > 0) maturitySamples.push({ days: d, expected: (p.expectedTerm != null ? p.expectedTerm : 30) })
+    }
+  }
+  const mostCommonTerm = maturitySamples.length ? mode(maturitySamples.map(m => m.expected), 30) : 30
+  const baseMult = (mostCommonTerm === 90)
+    ? (riskBand === 'Good' ? 3.0 : (riskBand === 'Average' ? 2.75 : 2.5))
+    : (riskBand === 'Good' ? 2.0 : (riskBand === 'Average' ? 1.5 : 1.0))
+  const creditLimit: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMult) : ''
+
   // Metrics rows
   function assessLower(val: any, goodMax: number, avgMax: number) {
     if (val === '') return ''
@@ -408,6 +427,9 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Avg Maturity Over By (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
   metrics.push({ label: '% of Payments Over Term', value: pctChecksHandedOver30, assess: assessLower(pctChecksHandedOver30, 0.30, 0.60) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: '' })
+  // Include purchases and credit limit like original Apps Script
+  metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
+  metrics.push({ label: 'Credit Limit (TRY)', value: creditLimit, assess: '' })
 
   // Aging buckets
   const aging = [0,0,0,0]
