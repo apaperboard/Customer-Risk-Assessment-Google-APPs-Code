@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+﻿import * as XLSX from 'xlsx'
 import { amountToNumber, normalizePayType } from './parsers'
 
 export type ImportResult = {
@@ -8,36 +8,42 @@ export type ImportResult = {
 
 const HEADER_ALIASES = {
   date: [
-    'date','tarih','التاريخ','تاريخ','tarİh','tari̇h'
+    'date','tarih','Ø§Ù„ØªØ§Ø±ÙŠØ®','ØªØ§Ø±ÙŠØ®','tarÄ°h','tariÌ‡h'
   ],
   desc: [
-    'açıklama','aciklama','الوصف','البيان','شرح','description','desc','not','memo'
+    'aÃ§Ä±klama','aciklama','Ø§Ù„ÙˆØµÙ','Ø§Ù„Ø¨ÙŠØ§Ù†','Ø´Ø±Ø­','description','desc','not','memo'
   ],
   debit: [
-    'debit','borç','borc','ödeme','odeme','tahsilat','المبلغ المدين','مدين','payment'
+    'debit','borÃ§','borc','Ã¶deme','odeme','tahsilat','Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ù…Ø¯ÙŠÙ†','Ù…Ø¯ÙŠÙ†','payment'
   ],
   credit: [
-    'credit','alacak','fatura','الفاتورة','المبلغ الدائن','دائن','invoice','fatura tutari','fatura miktari'
+    'credit','alacak','fatura','Ø§Ù„ÙØ§ØªÙˆØ±Ø©','Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ø¯Ø§Ø¦Ù†','Ø¯Ø§Ø¦Ù†','invoice','fatura tutari','fatura miktari'
   ],
   paytype: [
-    'pay type','payment type','ödeme tipi','odeme tipi','odeme turu','tahsilat tipi','paytype',
+    'pay type','payment type','Ã¶deme tipi','odeme tipi','odeme turu','tahsilat tipi','paytype',
     // Some ERPs place payment method under a generic 'project' column name
     'proje','projekt',
     // Arabic labels
-    'نوع الدفع','طريقة الدفع','المشروع'
+    'Ù†ÙˆØ¹ Ø§Ù„Ø¯ÙØ¹','Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹','Ø§Ù„Ù…Ø´Ø±ÙˆØ¹'
   ]
 }
 
 const TOTAL_WORDS = [
   'total','sub total','subtotal','page total','genel toplam','toplam','ara toplam',
-  'المجموع','إجمالي','الاجمالي','اجمالي'
+  'Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹','Ø¥Ø¬Ù…Ø§Ù„ÙŠ','Ø§Ù„Ø§Ø¬Ù…Ø§Ù„ÙŠ','Ø§Ø¬Ù…Ø§Ù„ÙŠ'
 ]
 
 const BEGIN_BAL_WORDS = [
   'opening balance','beginning balance','balance forward','opening','devir',
-  'açılış bakiyesi','baslangiç bakiyesi','başlangıç bakiyesi','ilk bakiye',
-  'رصيد افتتاحي','الرصيد الافتتاحي','رصيد أول المدة','رصيد اول المدة'
+  'aÃ§Ä±lÄ±ÅŸ bakiyesi','baslangiÃ§ bakiyesi','baÅŸlangÄ±Ã§ bakiyesi','ilk bakiye',
+  'Ø±ØµÙŠØ¯ Ø§ÙØªØªØ§Ø­ÙŠ','Ø§Ù„Ø±ØµÙŠØ¯ Ø§Ù„Ø§ÙØªØªØ§Ø­ÙŠ','Ø±ØµÙŠØ¯ Ø£ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø©','Ø±ØµÙŠØ¯ Ø§ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø©'
 ]
+
+// Extra canonical Arabic/Turkish forms for opening balance and combined list
+const BEGIN_BAL_WORDS_EXTRA = [
+  'رصيد اول المدة','رصيد أول المدة','الرصيد الافتتاحي','رصيد افتتاحي','رصيد بداية المدة','ilk bakiye'
+]
+const BEGIN_BAL_ALL = (BEGIN_BAL_WORDS as string[]).concat(BEGIN_BAL_WORDS_EXTRA)
 
 function lc(x: any): string { return String(x ?? '').toLowerCase() }
 
@@ -107,7 +113,7 @@ function buildObjects(headers: any[], rows: any[][]): Record<string, any>[] {
     }
     // Also provide canonical keys to make downstream matching robust
     if (iDate  >= 0) obj['date'] = r[iDate] ?? obj['date'] ?? ''
-    // description: prefer Açıklama/الوصف/البيان/شرح over plain 'description', then fallbacks
+    // description: prefer AÃ§Ä±klama/Ø§Ù„ÙˆØµÙ/Ø§Ù„Ø¨ÙŠØ§Ù†/Ø´Ø±Ø­ over plain 'description', then fallbacks
     let descVal = ''
     for (const idx of descCandidateIdx) { if (r[idx] != null && String(r[idx]).trim() !== '') { descVal = r[idx]; break } }
     if (!descVal && iDesc >= 0) descVal = r[iDesc] ?? ''
@@ -150,7 +156,7 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
   for (let i = 0; i < headerRowIdx; i++) {
     const row = grid[i]
     if (!row || row.length === 0) continue
-    if (rowHasAny(row, BEGIN_BAL_WORDS)) {
+    if (rowHasAny(row, BEGIN_BAL_ALL)) {
       // Consider only debit/credit columns for numeric
       const candidates: number[] = []
       const pushNum = (idx: number) => { if (idx >= 0 && idx < row.length) { const n = amountToNumber(row[idx]); if (isFinite(n)) candidates.push(n) } }
@@ -164,7 +170,7 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
 
   // Detect opening/beginning balance row immediately after header (strict rules)
   const possibleBeginRow = grid[headerRowIdx + 1] || []
-  const hasBeginKeywords = rowHasAny(possibleBeginRow, BEGIN_BAL_WORDS)
+  const hasBeginKeywords = rowHasAny(possibleBeginRow, BEGIN_BAL_ALL)
   // Prefer debit/credit cells only; ignore date/other columns to avoid Excel date serials
   const numsAfterHeader: number[] = []
   if (iDebitPref >= 0 && iDebitPref < possibleBeginRow.length) {
@@ -176,7 +182,7 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
   const dateCell = (iDatePref >= 0 && iDatePref < possibleBeginRow.length) ? String(possibleBeginRow[iDatePref] ?? '') : ''
   const dateLike = /(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2,4})/.test(dateCell)
   // Criteria: either keywords, or (no date in date column AND there is exactly one numeric in debit/credit)
-  if (!autoBeginBalance && (hasBeginKeywords || (!dateLike && numsAfterHeader.length === 1))) {
+  if (!autoBeginBalance && hasBeginKeywords) {
     autoBeginBalance = numsAfterHeader.length ? numsAfterHeader[0] : undefined
   }
 
@@ -227,3 +233,4 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
 
   return { rows: filtered, autoBeginBalance }
 }
+
