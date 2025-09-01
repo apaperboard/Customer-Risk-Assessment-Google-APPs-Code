@@ -175,6 +175,27 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     return row[orig]
   }
 
+  // If date column not found via headers, auto-detect by scanning cells for parseable dates
+  let cDateEff = cDate
+  if (cDateEff <= 0) {
+    const sampleCount = Math.min(rows.length, 400)
+    let bestIdx = -1, bestHits = 0, bestRatio = 0
+    for (let i = 1; i <= headers.length; i++) {
+      let total = 0, hits = 0
+      for (let r = 0; r < sampleCount; r++) {
+        const v = get(rows[r] as any, i)
+        if (v == null || String(v).trim() === '') continue
+        total++
+        const d = parseDMY(v)
+        if (d instanceof Date && !isNaN(+d)) hits++
+      }
+      if (total === 0) continue
+      const ratio = hits / total
+      if (hits > bestHits || (hits === bestHits && ratio > bestRatio)) { bestIdx = i; bestHits = hits; bestRatio = ratio }
+    }
+    if (bestHits >= 3 && bestRatio >= 0.15) cDateEff = bestIdx
+  }
+
   const invoices: Invoice[] = []
   const payments: Payment[] = []
   let firstInvoiceDate: Date | null = null
@@ -211,7 +232,7 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
       }
       return get(row, cDesc)
     })()
-    const date   = parseDMY(get(row, cDate)) || extractDateFromText(desc)
+    const date   = parseDMY(get(row, cDateEff)) || extractDateFromText(desc)
 
     const empty = [credit, debit, desc, date].every(v => v == null || v === '' || (typeof v === 'number' && isNaN(v)))
     if (empty) continue
