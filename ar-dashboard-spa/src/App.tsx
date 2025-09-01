@@ -72,6 +72,7 @@ export default function App() {
     'Average Monthly Purchases (TRY)': { en: 'Average Monthly Purchases (TRY)', tr: 'Aylık Ortalama Alımlar (TRY)', ar: 'متوسط المشتريات الشهري (TRY)' },
     'Credit Limit (TRY)': { en: 'Credit Limit (TRY)', tr: 'Kredi Limiti (TRY)', ar: 'حد الائتمان (TRY)' },
     'Customer Risk Rating': { en: 'Customer Risk Rating', tr: 'Müşteri Risk Notu', ar: 'تصنيف مخاطر العميل' },
+    'Overdue Balance as % of Credit Limit': { en: 'Overdue Balance as % of Credit Limit', tr: 'Kredi Limitine Göre Vadesi Geçmiş Bakiye %', ar: 'الرصيد المتأخر كنسبة من حد الائتمان' },
   }
   const metricNamesAll = { ...metricNames, ...metricNamesExtra }
   const assessNames: Record<'en'|'tr'|'ar', Record<string,string>> = {
@@ -86,7 +87,8 @@ export default function App() {
     '% of Payments Delivered After Term': 'Share of paid invoices where (payment date - invoice date) exceeds the invoice term; all payment types.',
     'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.',
     'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
-    'Credit Limit (TRY)': 'Average monthly purchases x risk/term multiplier; rounded up to the nearest 10,000.'
+    'Credit Limit (TRY)': 'Average monthly purchases x risk/term multiplier; rounded up to the nearest 10,000.',
+    'Overdue Balance as % of Credit Limit': 'Unpaid balance past due (by term) divided by assigned credit limit.'
   }
 
   const onFile = async (f: File) => {
