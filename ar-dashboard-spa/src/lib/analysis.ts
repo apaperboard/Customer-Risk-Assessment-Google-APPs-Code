@@ -195,6 +195,7 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
     }
     if (bestHits >= 3 && bestRatio >= 0.15) cDateEff = bestIdx
   }
+  try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.cDateIndex = cDateEff } catch {}
 
   const invoices: Invoice[] = []
   const payments: Payment[] = []

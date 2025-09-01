@@ -39,6 +39,15 @@ export function parseDMY(v: any): Date | null {
     return new Date(base.getTime() + d * MS + Math.round((v - d) * MS))
   }
   const s = normalizeDigits(v).trim()
+  // Handle Excel serial dates encoded as numeric strings (e.g., '45179')
+  if (/^\d{4,7}$/.test(s)) {
+    const num = Number(s)
+    if (isFinite(num) && num >= 20000 && num <= 80000) {
+      const base = new Date(Date.UTC(1899, 11, 30))
+      const d = Math.floor(num), MS = 86400000
+      return new Date(base.getTime() + d * MS)
+    }
+  }
   const head = s.includes(' ') ? s.slice(0, s.indexOf(' ')) : s
   const norm = head.replace(/[\.\-]/g, '/')
   const parts = norm.split('/')
