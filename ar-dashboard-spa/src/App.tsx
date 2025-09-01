@@ -72,6 +72,7 @@ export default function App() {
     'Average Monthly Purchases (TRY)': { en: 'Average Monthly Purchases (TRY)', tr: 'Aylık Ortalama Alımlar (TRY)', ar: 'متوسط المشتريات الشهري (TRY)' },
     'Credit Limit (TRY)': { en: 'Credit Limit (TRY)', tr: 'Kredi Limiti (TRY)', ar: 'حد الائتمان (TRY)' },
     'Customer Risk Rating': { en: 'Customer Risk Rating', tr: 'Müşteri Risk Notu', ar: 'تصنيف مخاطر العميل' },
+    'Available Credit (TRY)': { en: 'Available Credit (TRY)', tr: 'Kullanılabilir Kredi (TRY)', ar: 'الائتمان المتاح (TRY)' },
     'Overdue Balance as % of Credit Limit': { en: 'Overdue Balance as % of Credit Limit', tr: 'Kredi Limitine Göre Vadesi Geçmiş Bakiye %', ar: 'الرصيد المتأخر كنسبة من حد الائتمان' },
   }
   const metricNamesAll = { ...metricNames, ...metricNamesExtra }
@@ -88,6 +89,7 @@ export default function App() {
     'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.',
     'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
     'Credit Limit (TRY)': 'Average monthly purchases x risk/term multiplier; rounded up to the nearest 10,000.',
+    'Available Credit (TRY)': 'Credit limit minus current open balance; not less than zero.',
     'Overdue Balance as % of Credit Limit': 'Unpaid balance past due (by term) divided by assigned credit limit.'
   }
 
@@ -279,7 +281,10 @@ export default function App() {
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
                   const items = result.metrics.filter(m => specialLabels.has(m.label))
-                  return items.map((m, i) => {
+                  const cl = items.find(it => it.label === 'Credit Limit (TRY)')?.value
+                  const openBal = result.invoices.length ? (result.invoices[result.invoices.length - 1].running ?? 0) : 0
+                  const available: any = (typeof cl === 'number') ? Math.max(0, cl - openBal) : ''
+                  const rows = items.map((m, i) => {
                     const isPct = m.label.includes('%')
                     const fmt = (v: any) => {
                       if (v === '') return ''
@@ -299,6 +304,15 @@ export default function App() {
                       </tr>
                     )
                   })
+                  rows.push(
+                    <tr key={'available-credit'}>
+                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(metricNamesAll as any)['Available Credit (TRY)'][lang]}</td>
+                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{
+                        (typeof available === 'number') ? available.toLocaleString(undefined, { maximumFractionDigits: 0 }) : ''
+                      }</td>
+                    </tr>
+                  )
+                  return rows
                 })()}
               </tbody>
             </table>
