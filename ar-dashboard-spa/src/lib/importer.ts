@@ -19,7 +19,7 @@ const TOTAL_WORDS = ['total','sub total','subtotal','page total','genel toplam',
 const BEGIN_BAL_WORDS = ['opening balance','beginning balance','balance forward','opening','devir','ilk bakiye','رصيد اول المدة','رصيد أول المدة','الرصيد الافتتاحي','رصيد افتتاحي','رصيد بداية المدة']
 
 // Extra canonical Arabic/Turkish forms for opening balance and combined list
-const BEGIN_BAL_WORDS_EXTRA = []
+const BEGIN_BAL_WORDS_EXTRA: string[] = []
 const BEGIN_BAL_ALL = (BEGIN_BAL_WORDS as string[]).concat(BEGIN_BAL_WORDS_EXTRA)
 
 function lc(x: any): string { return String(x ?? '').toLowerCase() }
