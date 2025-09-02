@@ -420,6 +420,12 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     if (inv._synthetic) continue
     if (inv._appliedTerms && inv._appliedTerms.length) inv.term = mode(inv._appliedTerms, inv.term)
   }
+  try {
+    const invTermCounts: Record<string, number> = {}
+    for (const inv of invoices) { const k = String(inv.term); invTermCounts[k] = (invTermCounts[k] || 0) + 1 }
+    const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+    dbg.invoiceTermCounts = invTermCounts
+  } catch {}
 
   const displayInvoices = invoices.filter(inv => !inv._synthetic)
   const paid = displayInvoices.filter(inv => inv.paid && inv.closingDate)

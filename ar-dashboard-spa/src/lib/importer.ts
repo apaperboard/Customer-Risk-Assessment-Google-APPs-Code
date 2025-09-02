@@ -192,26 +192,19 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
     }
   }
 
-  // Detect opening/beginning balance row immediately after header (strict rules)
-  const possibleBeginRow = grid[headerRowIdx + 1] || []
-  const hasBeginKeywords = rowHasAny(possibleBeginRow, BEGIN_BAL_ALL)
-  // Prefer debit/credit cells only; ignore date/other columns to avoid Excel date serials
-  const numsAfterHeader: number[] = []
-  if (iDebitPref >= 0 && iDebitPref < possibleBeginRow.length) {
-    const n = amountToNumber(possibleBeginRow[iDebitPref]); if (isFinite(n)) numsAfterHeader.push(n)
-  }
-  if (iCreditPref >= 0 && iCreditPref < possibleBeginRow.length) {
-    const n = amountToNumber(possibleBeginRow[iCreditPref]); if (isFinite(n)) numsAfterHeader.push(n)
-  }
-  const dateCell = (iDatePref >= 0 && iDatePref < possibleBeginRow.length) ? String(possibleBeginRow[iDatePref] ?? '') : ''
-  const dateLike = /(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{2,4})/.test(dateCell)
-  // Criteria: either keywords, or (no date in date column AND there is exactly one numeric in debit/credit)
-  if (!autoBeginBalance && hasBeginKeywords) {
-    autoBeginBalance = numsAfterHeader.length ? numsAfterHeader[0] : undefined
+  // Detect opening/beginning balance row within next few rows after header (keywords only)
+  let openingRowIndex: number | undefined
+  for (let i = headerRowIdx + 1; i <= Math.min(grid.length - 1, headerRowIdx + 5); i++) {
+    const row = grid[i] || []
+    if (!rowHasAny(row, BEGIN_BAL_ALL)) continue
+    const nums: number[] = []
+    if (iDebitPref >= 0 && iDebitPref < row.length) { const n = amountToNumber(row[iDebitPref]); if (isFinite(n)) nums.push(n) }
+    if (iCreditPref >= 0 && iCreditPref < row.length) { const n = amountToNumber(row[iCreditPref]); if (isFinite(n)) nums.push(n) }
+    if (nums.length) { autoBeginBalance = nums.reduce((a,b)=> Math.abs(b)>Math.abs(a)?b:a, 0); openingRowIndex = i; break }
   }
 
   // Body rows start after header + possible opening balance row
-  const startIdx = (autoBeginBalance != null) ? (headerRowIdx + 2) : (headerRowIdx + 1)
+  const startIdx = (openingRowIndex != null) ? (openingRowIndex + 1) : (headerRowIdx + 1)
   const body = grid.slice(startIdx)
   // Stop at the first trailing set of 5+ consecutive empty rows
   let end = body.length
@@ -240,6 +233,7 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
       headers,
       headersLower: headers.map((h:any)=>String(h).toLowerCase()),
       autoBeginBalance,
+      openingRowIndex,
       startIdx,
       totalRows: grid.length,
       bodyRows: body.length,

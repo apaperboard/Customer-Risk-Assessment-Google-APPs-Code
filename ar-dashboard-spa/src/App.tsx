@@ -120,7 +120,25 @@ export default function App() {
   const result = useMemo(() => {
     if (!upload) return null
     const model = parseRowsToModel(upload.rows)
-    const bb = Number(beginBal) || 0
+    // Parse beginning balance robustly (supports commas and different locales)
+    const bb = (() => {
+      const s = String(beginBal ?? '').trim()
+      const onlyDigits = s.replace(/[^0-9,\.-]/g, '')
+      // prefer comma as thousands; if both present, assume last separator is decimal
+      let n: number
+      if (onlyDigits.includes(',') && onlyDigits.includes('.')) {
+        const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')
+        const norm = (lc > ld) ? onlyDigits.replace(/\./g, '').replace(',', '.') : onlyDigits.replace(/,/g, '')
+        n = Number(norm)
+      } else if (onlyDigits.includes(',')) {
+        const parts = onlyDigits.split(',');
+        const norm = (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) ? (parts[0].replace(/,/g,'') + '.' + parts[1]) : onlyDigits.replace(/,/g,'')
+        n = Number(norm)
+      } else {
+        n = Number(onlyDigits)
+      }
+      return isFinite(n) ? n : 0
+    })()
     const start = model.firstTransactionDate || model.firstInvoiceDate
     if (!start) return { error: 'No dated rows found.' }
     return analyze(model.invoices, model.payments, start, bb)
@@ -429,26 +447,38 @@ function DebugPanel() {
   // Read from global debug object populated by importer/analysis
   const dbg: any = (globalThis as any).__arDebug || {}
   const headersLower: string[] = dbg.headersLower || []
+  const headerRowIdx: number | undefined = dbg.headerRowIdx
   const descColsHeaders: string[] = dbg.descColsHeaders || []
   const cPayTpIndex: number | undefined = dbg.cPayTpIndex
+  const cPayTpIndexAuto: number | undefined = dbg.cPayTpIndexAuto
   const cMaturityIndex: number | undefined = dbg.cMaturityIndex
+  const cDateIndex: number | undefined = dbg.cDateIndex
   const checkInspect: any[] = dbg.checkInspect || []
   const checkNoMatExamples: any[] = dbg.checkNoMatExamples || []
   const counts = dbg.checkCounts || { total: checkInspect.length, withMaturity: checkInspect.filter((x:any)=>!!x.maturity).length, withoutMaturity: checkInspect.filter((x:any)=>!x.maturity).length }
   const reconcile = dbg.reconcile || {}
+  const payTypes: Record<string,number> = dbg.payTypes || {}
+  const termCounts: Record<string,number> = dbg.invoiceTermCounts || {}
+  const openingRowIndex: number | undefined = dbg.openingRowIndex
 
   return (
     <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fffef8', marginBottom: 16 }}>
       <div style={{ fontWeight: 600, marginBottom: 8 }}>Debug Summary</div>
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', rowGap: 6, columnGap: 8 }}>
+        <div>Header row index:</div>
+        <div>{typeof headerRowIdx === 'number' ? String(headerRowIdx) : 'n/a'}</div>
         <div>Headers (lower):</div>
         <div>{headersLower.join(', ') || 'n/a'}</div>
         <div>Description columns:</div>
         <div>{descColsHeaders.join(', ') || 'n/a'}</div>
+        <div>Date column index:</div>
+        <div>{typeof cDateIndex === 'number' ? String(cDateIndex) : 'n/a'}</div>
         <div>Pay Type column index:</div>
-        <div>{typeof cPayTpIndex === 'number' ? String(cPayTpIndex) : 'n/a'}</div>
+        <div>{typeof cPayTpIndex === 'number' ? String(cPayTpIndex) : 'n/a'}{typeof cPayTpIndexAuto === 'number' ? ` (auto ${cPayTpIndexAuto})` : ''}</div>
         <div>Maturity column index:</div>
         <div>{typeof cMaturityIndex === 'number' ? String(cMaturityIndex) : 'n/a'}</div>
+        <div>Opening balance row index:</div>
+        <div>{typeof openingRowIndex === 'number' ? String(openingRowIndex) : 'n/a'}</div>
         <div>Checks parsed (with/without maturity):</div>
         <div>{counts.withMaturity} / {counts.withoutMaturity} (total {counts.total})</div>
         <div>Reconcile (expected vs computed):</div>
@@ -458,6 +488,10 @@ function DebugPanel() {
           {typeof reconcile.computedOutstanding === 'number' ? reconcile.computedOutstanding.toLocaleString() : 'n/a'}
           {typeof reconcile.delta === 'number' ? ` (delta ${reconcile.delta.toLocaleString()})` : ''}
         </div>
+        <div>Pay types:</div>
+        <div>{Object.keys(payTypes).length ? Object.entries(payTypes).map(([k,v])=>`${k||'∅'}=${v}`).join(', ') : 'n/a'}</div>
+        <div>Invoice term counts:</div>
+        <div>{Object.keys(termCounts).length ? Object.entries(termCounts).map(([k,v])=>`${k}d=${v}`).join(', ') : 'n/a'}</div>
         {checkNoMatExamples.length > 0 && (
           <>
             <div>First no-maturity example:</div>

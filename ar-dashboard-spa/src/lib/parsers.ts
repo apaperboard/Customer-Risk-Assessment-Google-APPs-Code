@@ -1,4 +1,4 @@
-import dayjs from 'dayjs'
+﻿import dayjs from 'dayjs'
 
 // Normalize Arabic-Indic and Eastern Arabic-Indic digits to ASCII
 export function normalizeDigits(v: any): string {
@@ -93,7 +93,7 @@ export function extractDateFromText(s: any): Date | null {
   if (!s) return null
   const str = normalizeDigits(String(s))
   // Prefer labelled maturity/due terms close to a date
-  const labelTerms = ['vade','vadesi','vade tarihi','son ödeme','son odeme','maturity','maturity date','due','due date','استحقاق','تاريخ الاستحقاق','الاستحقاق','تستحق']
+  const labelTerms = ['vade','vadesi','vade tarihi','son Ã¶deme','son odeme','maturity','maturity date','due','due date','Ø§Ø³ØªØ­Ù‚Ø§Ù‚','ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚','Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚','ØªØ³ØªØ­Ù‚']
   const labelPattern = new RegExp('(?:' + labelTerms.join('|') + ')[^0-9]{0,20}(\\d{1,2}[\\/\\.\\-]\\d{1,2}[\\/\\.\\-]\\d{2,4})','i')
   let m = str.match(labelPattern)
   if (m) {
@@ -125,10 +125,10 @@ export function extractDateFromText(s: any): Date | null {
   // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR) (take last match)
   const monthMap: Record<string, number> = {
     jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
-    ocak:1,şubat:2,subat:2,mart:3,nisan:4,mayıs:5,mayis:5,haziran:6,temmuz:7,ağustos:8,agustos:8,eylül:9,eylul:9,ekim:10,kasım:11,kasim:11,aralık:12,aralik:12
+    ocak:1,ÅŸubat:2,subat:2,mart:3,nisan:4,mayÄ±s:5,mayis:5,haziran:6,temmuz:7,aÄŸustos:8,agustos:8,eylÃ¼l:9,eylul:9,ekim:10,kasÄ±m:11,kasim:11,aralÄ±k:12,aralik:12
   }
   last = null
-  const re3 = /\b(\d{1,2})\s+([a-zçğıöşü]+)\s+(\d{2,4})\b/gi
+  const re3 = /\b(\d{1,2})\s+([a-zÃ§ÄŸÄ±Ã¶ÅŸÃ¼]+)\s+(\d{2,4})\b/gi
   while ((mmatch = re3.exec(str.toLowerCase())) !== null) last = mmatch
   if (last) {
     const dd = Number(last[1]); const key = last[2].normalize('NFC')
@@ -150,9 +150,9 @@ export function normalizePayType(v: any): { type: string; termDays: number | nul
   const t = lc(v).trim()
   if (!t) return { type: '', termDays: null }
   // Turkish + English + Arabic variants
-  if (/(cek|çek|cheque|check|senet|vadeli|vade|بولصة|شيك)/.test(t)) return { type: 'Check', termDays: 90 }
-  if (/(kk|kredi\s*kart|credit\s*card|card|kart|بطاقة|فيزا|كردت)/.test(t)) return { type: 'Card', termDays: 30 }
-  if (/(peşin|pesin|cash|nakit|نقد|نقدي|كاش)/.test(t)) return { type: 'Cash', termDays: 30 }
+  if (/(cek|Ã§ek|cheque|check|senet|vadeli|vade|Ø¨ÙˆÙ„ØµØ©|Ø´ÙŠÙƒ)/.test(t)) return { type: 'Check', termDays: 90 }
+  if (/(kk|k\\.k\\.|kredi\\s*kart|credit\\s*card|card|kart|بطاقة|فيزا|كردت))/.test(t)) return { type: 'Card', termDays: 30 }
+  if (/(peÅŸin|pesin|cash|nakit|Ù†Ù‚Ø¯|Ù†Ù‚Ø¯ÙŠ|ÙƒØ§Ø´)/.test(t)) return { type: 'Cash', termDays: 30 }
   return { type: '', termDays: null }
 }
 
@@ -167,3 +167,4 @@ export function mode(arr: Array<number | null | undefined>, def: number): number
   }
   return best ?? def
 }
+
