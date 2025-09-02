@@ -7,42 +7,19 @@ export type ImportResult = {
 }
 
 const HEADER_ALIASES = {
-  date: [
-    'date','tarih','Ø§Ù„ØªØ§Ø±ÙŠØ®','ØªØ§Ø±ÙŠØ®','tarÄ°h','tariÌ‡h'
-  ],
-  desc: [
-    'aÃ§Ä±klama','aciklama','Ø§Ù„ÙˆØµÙ','Ø§Ù„Ø¨ÙŠØ§Ù†','Ø´Ø±Ø­','description','desc','not','memo'
-  ],
-  debit: [
-    'debit','borÃ§','borc','Ã¶deme','odeme','tahsilat','Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ù…Ø¯ÙŠÙ†','Ù…Ø¯ÙŠÙ†','payment'
-  ],
-  credit: [
-    'credit','alacak','fatura','Ø§Ù„ÙØ§ØªÙˆØ±Ø©','Ø§Ù„Ù…Ø¨Ù„Øº Ø§Ù„Ø¯Ø§Ø¦Ù†','Ø¯Ø§Ø¦Ù†','invoice','fatura tutari','fatura miktari'
-  ],
-  paytype: [
-    'pay type','payment type','Ã¶deme tipi','odeme tipi','odeme turu','tahsilat tipi','paytype',
-    // Some ERPs place payment method under a generic 'project' column name
-    'proje','projekt',
-    // Arabic labels
-    'Ù†ÙˆØ¹ Ø§Ù„Ø¯ÙØ¹','Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹','Ø§Ù„Ù…Ø´Ø±ÙˆØ¹'
-  ]
+  date: ['date','tarih','tarıh','التاريخ','تاريخ'],
+  desc: ['açıklama','aciklama','description','desc','not','memo','البيان','الوصف','ملاحظات'],
+  debit: ['debit','borç','borc','ödeme','odeme','tahsilat','payment','مدين'],
+  credit: ['credit','alacak','fatura','invoice','fatura tutari','fatura miktari','دائن'],
+  paytype: ['pay type','payment type','ödeme tipi','odeme tipi','odeme turu','tahsilat tipi','paytype','proje','projekt','المشروع','مشروع']
 }
 
-const TOTAL_WORDS = [
-  'total','sub total','subtotal','page total','genel toplam','toplam','ara toplam',
-  'Ø§Ù„Ù…Ø¬Ù…ÙˆØ¹','Ø¥Ø¬Ù…Ø§Ù„ÙŠ','Ø§Ù„Ø§Ø¬Ù…Ø§Ù„ÙŠ','Ø§Ø¬Ù…Ø§Ù„ÙŠ'
-]
+const TOTAL_WORDS = ['total','sub total','subtotal','page total','genel toplam','toplam','ara toplam','الإجمالي','المجموع']
 
-const BEGIN_BAL_WORDS = [
-  'opening balance','beginning balance','balance forward','opening','devir',
-  'aÃ§Ä±lÄ±ÅŸ bakiyesi','baslangiÃ§ bakiyesi','baÅŸlangÄ±Ã§ bakiyesi','ilk bakiye',
-  'Ø±ØµÙŠØ¯ Ø§ÙØªØªØ§Ø­ÙŠ','Ø§Ù„Ø±ØµÙŠØ¯ Ø§Ù„Ø§ÙØªØªØ§Ø­ÙŠ','Ø±ØµÙŠØ¯ Ø£ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø©','Ø±ØµÙŠØ¯ Ø§ÙˆÙ„ Ø§Ù„Ù…Ø¯Ø©'
-]
+const BEGIN_BAL_WORDS = ['opening balance','beginning balance','balance forward','opening','devir','ilk bakiye','رصيد اول المدة','رصيد أول المدة','الرصيد الافتتاحي','رصيد افتتاحي','رصيد بداية المدة']
 
 // Extra canonical Arabic/Turkish forms for opening balance and combined list
-const BEGIN_BAL_WORDS_EXTRA = [
-  'رصيد اول المدة','رصيد أول المدة','الرصيد الافتتاحي','رصيد افتتاحي','رصيد بداية المدة','ilk bakiye'
-]
+const BEGIN_BAL_WORDS_EXTRA = []
 const BEGIN_BAL_ALL = (BEGIN_BAL_WORDS as string[]).concat(BEGIN_BAL_WORDS_EXTRA)
 
 function lc(x: any): string { return String(x ?? '').toLowerCase() }
@@ -251,4 +228,5 @@ export function extractTable(ws: XLSX.WorkSheet): ImportResult {
 
   return { rows: filtered, autoBeginBalance }
 }
+
 
