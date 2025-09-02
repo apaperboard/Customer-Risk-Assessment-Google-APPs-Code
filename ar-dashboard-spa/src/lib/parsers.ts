@@ -1,4 +1,4 @@
-﻿import dayjs from 'dayjs'
+﻿// Clean reimplementation to remove invalid characters and support TR/AR parsing
 
 // Normalize Arabic-Indic and Eastern Arabic-Indic digits to ASCII
 export function normalizeDigits(v: any): string {
@@ -14,20 +14,10 @@ export function normalizeDigits(v: any): string {
 }
 
 function makeDateClamped(yyyy: number, mm: number, dd: number): Date {
-  // mm is 1-based month
   const dt = new Date(yyyy, mm - 1, dd)
   if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) return dt
   const dim = new Date(yyyy, mm, 0).getDate()
-  const dd2 = Math.min(dd, dim)
-  const dt2 = new Date(yyyy, mm - 1, dd2)
-  try {
-    const dbg: any = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
-    const arr = (dbg.dateClampedSamples ||= [])
-    const from = `${dd}/${mm}/${yyyy}`
-    const to = `${dd2}/${mm}/${yyyy}`
-    if (arr.length < 5) arr.push({ from, to })
-  } catch {}
-  return dt2
+  return new Date(yyyy, mm - 1, Math.min(dd, dim))
 }
 
 export function parseDMY(v: any): Date | null {
@@ -39,13 +29,13 @@ export function parseDMY(v: any): Date | null {
     return new Date(base.getTime() + d * MS + Math.round((v - d) * MS))
   }
   const s = normalizeDigits(v).trim()
-  // Handle Excel serial dates encoded as numeric strings (e.g., '45179')
+  // Excel serial given as string
   if (/^\d{4,7}$/.test(s)) {
     const num = Number(s)
     if (isFinite(num) && num >= 20000 && num <= 80000) {
       const base = new Date(Date.UTC(1899, 11, 30))
-      const d = Math.floor(num), MS = 86400000
-      return new Date(base.getTime() + d * MS)
+      const MS = 86400000
+      return new Date(base.getTime() + Math.floor(num) * MS)
     }
   }
   const head = s.includes(' ') ? s.slice(0, s.indexOf(' ')) : s
@@ -92,8 +82,8 @@ export function amountToNumber(v: any): number {
 export function extractDateFromText(s: any): Date | null {
   if (!s) return null
   const str = normalizeDigits(String(s))
-  // Prefer labelled maturity/due terms close to a date
-  const labelTerms = ['vade','vadesi','vade tarihi','son Ã¶deme','son odeme','maturity','maturity date','due','due date','Ø§Ø³ØªØ­Ù‚Ø§Ù‚','ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚','Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚','ØªØ³ØªØ­Ù‚']
+  // labelled terms near a date
+  const labelTerms = ['vade','vadesi','vade tarihi','son odeme','son ödeme','maturity','maturity date','due','due date']
   const labelPattern = new RegExp('(?:' + labelTerms.join('|') + ')[^0-9]{0,20}(\\d{1,2}[\\/\\.\\-]\\d{1,2}[\\/\\.\\-]\\d{2,4})','i')
   let m = str.match(labelPattern)
   if (m) {
@@ -103,8 +93,7 @@ export function extractDateFromText(s: any): Date | null {
     if ((y as string).length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
     return parseDMY(parts[0] + '/' + parts[1] + '/' + y)
   }
-
-  // 1) dd/mm/yyyy or dd.mm.yyyy or dd-mm-yy (take last match)
+  // dd/mm/yyyy etc
   let last: RegExpExecArray | null = null
   const re1 = /(\b\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})\b/g
   let mmatch: RegExpExecArray | null
@@ -114,7 +103,7 @@ export function extractDateFromText(s: any): Date | null {
     if (y.length === 2) y = Number(y) >= 30 ? ('19' + y) : ('20' + y)
     return parseDMY(last[1] + '/' + last[2] + '/' + y)
   }
-  // 2) yyyy-mm-dd or yyyy/mm/dd (take last match)
+  // yyyy-mm-dd
   last = null
   const re2 = /\b(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})\b/g
   while ((mmatch = re2.exec(str)) !== null) last = mmatch
@@ -122,22 +111,20 @@ export function extractDateFromText(s: any): Date | null {
     const y = Number(last[1]), mm = Number(last[2]), dd = Number(last[3])
     return makeDateClamped(y, mm, dd)
   }
-  // 3) dd Mon yyyy (EN) or dd Ay yyyy (TR) (take last match)
+  // dd Mon yyyy or dd Ay yyyy (EN/TR)
   const monthMap: Record<string, number> = {
     jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12,
-    ocak:1,ÅŸubat:2,subat:2,mart:3,nisan:4,mayÄ±s:5,mayis:5,haziran:6,temmuz:7,aÄŸustos:8,agustos:8,eylÃ¼l:9,eylul:9,ekim:10,kasÄ±m:11,kasim:11,aralÄ±k:12,aralik:12
+    ocak:1,subat:2,şubat:2,mart:3,nisan:4,mayis:5,mayıs:5,haziran:6,temmuz:7,agustos:8,ağustos:8,eylul:9,eylül:9,ekim:10,kasim:11,kasım:11,aralik:12,aralık:12
   }
+  const re3 = /\b(\d{1,2})\s+([A-Za-zğüşıçöĞÜŞİÇÖ]+)\s+(\d{2,4})\b/gi
   last = null
-  const re3 = /\b(\d{1,2})\s+([a-zÃ§ÄŸÄ±Ã¶ÅŸÃ¼]+)\s+(\d{2,4})\b/gi
   while ((mmatch = re3.exec(str.toLowerCase())) !== null) last = mmatch
   if (last) {
     const dd = Number(last[1]); const key = last[2].normalize('NFC')
     const mm = monthMap[key as keyof typeof monthMap]
     let y = last[3]; if ((y as string).length === 2) y = Number(y) >= 30 ? ('19'+y) : ('20'+y)
     const yyyy = Number(y)
-    if (mm) {
-      return makeDateClamped(yyyy, mm, dd)
-    }
+    if (mm) return makeDateClamped(yyyy, mm, dd)
   }
   return null
 }
@@ -149,10 +136,9 @@ export function lc(s: any): string {
 export function normalizePayType(v: any): { type: string; termDays: number | null } {
   const t = lc(v).trim()
   if (!t) return { type: '', termDays: null }
-  // Turkish + English + Arabic variants
-  if (/(cek|Ã§ek|cheque|check|senet|vadeli|vade|Ø¨ÙˆÙ„ØµØ©|Ø´ÙŠÙƒ)/.test(t)) return { type: 'Check', termDays: 90 }
-  if (/(kk|k\\.k\\.|kredi\\s*kart|credit\\s*card|card|kart|بطاقة|فيزا|كردت))/.test(t)) return { type: 'Card', termDays: 30 }
-  if (/(peÅŸin|pesin|cash|nakit|Ù†Ù‚Ø¯|Ù†Ù‚Ø¯ÙŠ|ÙƒØ§Ø´)/.test(t)) return { type: 'Cash', termDays: 30 }
+  if (/(cek|çek|cheque|check|senet)/.test(t)) return { type: 'Check', termDays: 90 }
+  if (/(kk|k\.k\.|kredi\s*kart|credit\s*card|card|kart|بطاقة|فيزا|كردت)/.test(t)) return { type: 'Card', termDays: 30 }
+  if (/(peşin|pesin|cash|nakit|نقد|نقدي|كاش)/.test(t)) return { type: 'Cash', termDays: 30 }
   return { type: '', termDays: null }
 }
 
@@ -167,4 +153,3 @@ export function mode(arr: Array<number | null | undefined>, def: number): number
   }
   return best ?? def
 }
-
