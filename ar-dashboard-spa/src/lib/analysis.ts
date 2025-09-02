@@ -1,4 +1,4 @@
-import { amountToNumber, extractDateFromText, mode, normalizePayType, parseDMY } from './parsers'
+import { amountToNumber, extractDateFromText, mode, normalizePayType2 as normalizePayType, parseDMY } from './parsers'
 
 export type Invoice = {
   invoiceDate: Date
