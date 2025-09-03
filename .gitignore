@@ -15,3 +15,5 @@ Thumbs.db
 node_modules/
 *.log
 
+# Prevent nested repo copy from being re-added
+Customer-Risk-Assessment-Google-APPs-Code/
