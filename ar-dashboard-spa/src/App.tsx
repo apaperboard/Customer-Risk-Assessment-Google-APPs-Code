@@ -83,16 +83,59 @@ export default function App() {
     ar: { Good: 'جيد', Average: 'متوسط', Poor: 'ضعيف' }
   }
 
-  // Metric notes (tooltips in UI)
-  const metricNotes: Record<string, string> = {
-    '% of Checks Over Term': 'Checks with maturity duration greater than expected term divided by total checks with maturity.',
-    '% of Payments Delivered After Term': 'Share of paid invoices where (payment date - invoice date) exceeds the invoice term; all payment types.',
-    'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.',
-    'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
-    'Credit Limit (TRY)': 'Average monthly purchases x risk/term multiplier; rounded up to the nearest 10,000.',
-    'Available Credit (TRY)': 'Credit limit minus current open balance; not less than zero.',
-    'Overdue Balance as % of Credit Limit': 'Unpaid balance past due (by term) divided by assigned credit limit.'
+  // Metric notes (tooltips) localized per language
+  const metricNotesI18n: Record<'en'|'tr'|'ar', Record<string, string>> = {
+    en: {
+      'Average Days to Pay (Paid Only)': 'Average of (closing date − invoice date) for paid invoices only.',
+      'Weighted Avg Age of Unpaid Invoices (Days)': 'Amount‑weighted average days since invoice date for unpaid invoices (to today).',
+      '% of Unpaid Invoices Overdue': 'Share of unpaid invoices that are past due as of today (by term).',
+      'Blended Average Days to Pay': 'Average days from invoice date to closing (or today) across all invoices.',
+      'Average Check Maturity Duration (Days)': 'Amount‑weighted average days from invoice date to check maturity (checks only).',
+      'Avg Maturity Over By (Days)': 'Amount‑weighted average of (maturity duration − expected term) for checks with maturity.',
+      '% of Payments Over Term': 'Share of payment applications where maturity duration exceeds the expected term (all types).',
+      '% of Checks Over Term': 'Checks with maturity duration greater than expected term divided by total checks with maturity.',
+      '% of Payments Delivered After Term': 'Share of paid invoices where (payment date − invoice date) exceeds the invoice term; all payment types.',
+      'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
+      'Credit Limit (TRY)': 'Average monthly purchases × risk/term multiplier; rounded to nearest 10,000.',
+      'Available Credit (TRY)': 'Credit limit minus current open AR balance; floored at zero.',
+      'Overdue Balance as % of Credit Limit': 'Unpaid balance past due (by term) divided by assigned credit limit.',
+      'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.'
+    },
+    tr: {
+      'Average Days to Pay (Paid Only)': 'Sadece kapanmış faturalar için (kapanış tarihi − fatura tarihi) ortalaması.',
+      'Weighted Avg Age of Unpaid Invoices (Days)': 'Ödenmemiş faturaların bugüne kadar geçen gün sayısının, bakiye ile ağırlıklandırılmış ortalaması.',
+      '% of Unpaid Invoices Overdue': 'Bugün itibarıyla vadesini geçmiş ödenmemiş faturaların oranı (vadeye göre).',
+      'Blended Average Days to Pay': 'Tüm faturalar için fatura tarihinden kapanışa (veya bugüne) kadar ortalama gün.',
+      'Average Check Maturity Duration (Days)': 'Çeklerde fatura tarihinden çek vade tarihine kadar geçen günlerin, tutar ile ağırlıklandırılmış ortalaması.',
+      'Avg Maturity Over By (Days)': 'Vade süresinin beklenen vadenin üzerindeki kısmının, tutar ile ağırlıklandırılmış ortalaması (çekler).',
+      '% of Payments Over Term': 'Beklenen vadeyi aşan ödeme uygulamalarının payı (tüm ödeme türleri).',
+      '% of Checks Over Term': 'Beklenen vade süresini aşan çeklerin oranı (sadece vadesi olan çekler içinde).',
+      '% of Payments Delivered After Term': 'Ödeme süresi (ödeme tarihi − fatura tarihi) faturanın vadesini aşan faturaların payı; tüm türler.',
+      'Average Monthly Purchases (TRY)': 'Dönemde kesilen toplam fatura tutarı / başlangıçtan bu yana ay sayısı.',
+      'Credit Limit (TRY)': 'Aylık ortalama alış × risk/vade katsayısı; 10.000’e yuvarlanır.',
+      'Available Credit (TRY)': 'Kredi limiti − cari açık bakiye; sıfırın altına düşmez.',
+      'Overdue Balance as % of Credit Limit': 'Vadesi geçen ödenmemiş bakiye / atanmış kredi limiti.',
+      'Customer Risk Rating': 'Ağırlıklandırılmış metriklere dayalı birleşik not (İyi/Orta/Zayıf).'
+    },
+    ar: {
+      'Average Days to Pay (Paid Only)': 'متوسط (تاريخ الإقفال − تاريخ الفاتورة) للفواتير المسددة فقط.',
+      'Weighted Avg Age of Unpaid Invoices (Days)': 'متوسط أعمار الفواتير غير المسددة حتى اليوم، مُرجّحاً بالمبالغ المتبقية.',
+      '% of Unpaid Invoices Overdue': 'نسبة الفواتير غير المسددة المتأخرة حتى اليوم (وفق المدة).',
+      'Blended Average Days to Pay': 'متوسط الأيام من تاريخ الفاتورة إلى الإقفال (أو اليوم) لجميع الفواتير.',
+      'Average Check Maturity Duration (Days)': 'متوسط الأيام من تاريخ الفاتورة إلى استحقاق الشيك، مُرجّحاً بالمبلغ (للشيكات فقط).',
+      'Avg Maturity Over By (Days)': 'متوسط مقدار تجاوز مدة الاستحقاق المتوقعة للشيكات، مُرجّحاً بالمبلغ.',
+      '% of Payments Over Term': 'حصة الدفعات التي تتجاوز المدة المتوقعة (جميع الأنواع).',
+      '% of Checks Over Term': 'نسبة الشيكات التي تتجاوز مدة الاستحقاق المتوقعة ضمن الشيكات ذات الاستحقاق.',
+      '% of Payments Delivered After Term': 'حصة الفواتير المسددة حيث (تاريخ السداد − تاريخ الفاتورة) يتجاوز مدة الفاتورة؛ جميع أنواع الدفعات.',
+      'Average Monthly Purchases (TRY)': 'إجمالي المبالغ المفوترة خلال الفترة ÷ عدد الأشهر منذ البداية.',
+      'Credit Limit (TRY)': 'متوسط المشتريات الشهري × معامل حسب المخاطر/المدة؛ يُقرّب لأقرب 10,000.',
+      'Available Credit (TRY)': 'حد الائتمان − الرصيد المفتوح الحالي؛ لا يقل عن صفر.',
+      'Overdue Balance as % of Credit Limit': 'الرصيد غير المسدد المتأخر (حسب المدة) ÷ حد الائتمان المخصص.',
+      'Customer Risk Rating': 'تصنيف مركب (جيد/متوسط/ضعيف) مبني على مؤشرات موزونة.'
+    }
   }
+
+  const metricNote = (label: string) => (metricNotesI18n[lang]?.[label]) || metricNotesI18n.en[label] || ''
 
   const onFile = async (f: File) => {
     console.log('[upload] file selected:', f.name, f.size)
@@ -278,7 +321,7 @@ export default function App() {
                     const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
                     const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
                     const assessLocal = assessNames[lang][m.assess] ?? m.assess
-                    const note = metricNotes[m.label] || ''
+                    const note = metricNote(m.label)
                     return (
                       <tr key={i}>
                         <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
@@ -317,7 +360,7 @@ export default function App() {
                       return String(v)
                     }
                     const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
-                    const note = metricNotes[m.label] || ''
+                    const note = metricNote(m.label)
                     const riskColor = m.label === 'Customer Risk Rating'
                       ? (m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent')
                       : 'transparent'
@@ -330,8 +373,8 @@ export default function App() {
                   })
                   rows.push(
                     <tr key={'available-credit'}>
-                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(metricNamesAll as any)['Available Credit (TRY)'][lang]}</td>
-                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{
+                      <td title={metricNote('Available Credit (TRY)')} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(metricNamesAll as any)['Available Credit (TRY)'][lang]}</td>
+                      <td title={metricNote('Available Credit (TRY)')} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{
                         (typeof available === 'number') ? available.toLocaleString(undefined, { maximumFractionDigits: 0 }) : ''
                       }</td>
                     </tr>
