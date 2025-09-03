@@ -1,4 +1,4 @@
-import { amountToNumber, extractDateFromText, mode, normalizePayType, parseDMY } from './parsers'
+import { amountToNumber, extractDateFromText, mode, normalizePayType2 as normalizePayType, parseDMY } from './parsers'
 
 export type Invoice = {
   invoiceDate: Date
@@ -380,6 +380,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (p.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null })
       }
+      try {
+        const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+        const arr = (dbg.termApply ||= [])
+        if (arr.length < 50) arr.push({ invoiceDate: inv.invoiceDate, applyDate: p.paymentDate, payType: p.payType, expectedTerm: p.expectedTerm, amount: applied, via: 'direct' })
+      } catch {}
       if (inv.remaining === 0) { inv.paid = true; inv.closingDate = p.paymentDate }
     }
     if (rem > 0) {
@@ -411,6 +416,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (adv.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null })
       }
+      try {
+        const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+        const arr = (dbg.termApply ||= [])
+        if (arr.length < 50) arr.push({ invoiceDate: inv.invoiceDate, applyDate: adv.date, payType: adv.payType, expectedTerm: adv.expectedTerm, amount: applied, via: 'advance' })
+      } catch {}
       if (inv.remaining === 0) { inv.paid = true; inv.closingDate = inv.invoiceDate }
     }
     // update leftover for debug
@@ -425,6 +435,13 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     for (const inv of invoices) { const k = String(inv.term); invTermCounts[k] = (invTermCounts[k] || 0) + 1 }
     const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
     dbg.invoiceTermCounts = invTermCounts
+    const termSamples: any[] = []
+    for (const inv of invoices) {
+      if (termSamples.length >= 30) break
+      if (inv._synthetic) continue
+      termSamples.push({ invoiceDate: inv.invoiceDate, appliedTerms: inv._appliedTerms ? [...inv._appliedTerms] : [], finalTerm: inv.term, paid: inv.paid })
+    }
+    dbg.invoiceTermSamples = termSamples
   } catch {}
 
   const displayInvoices = invoices.filter(inv => !inv._synthetic)
@@ -586,7 +603,14 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     const withoutMaturity = total - withMaturity
     const checkCounts = { total, withMaturity, withoutMaturity }
     const unappliedAfterCarry = advances.filter(a => a.remaining > 0).map(a => ({ date: a.date, remaining: a.remaining }))
-    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, checkCounts, unapplied, unappliedAfterCarry }
+    const payTermSummary: Record<string, Record<string, number>> = {}
+    for (const p of payments) {
+      const t = String(p.payType || '')
+      const key = (p.expectedTerm == null ? 'null' : String(p.expectedTerm))
+      const bucket = (payTermSummary[t] ||= {})
+      bucket[key] = (bucket[key] || 0) + 1
+    }
+    ;(globalThis as any).__arDebug = { ...(globalThis as any).__arDebug, reconcile, payTypes, payTermSummary, checkCounts, unapplied, unappliedAfterCarry }
   } catch {}
 
   // Build Ledger (date-ordered invoices + payments + prepayments + opening)

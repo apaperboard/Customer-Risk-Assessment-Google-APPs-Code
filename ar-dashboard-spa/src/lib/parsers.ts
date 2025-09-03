@@ -133,8 +133,22 @@ export function lc(s: any): string {
   return String(s ?? '').toLowerCase()
 }
 
+// Turkish-specific: strip diacritics to ASCII then lowercase
+export function lcTR(s: any): string {
+  const str = String(s ?? '')
+  const map: Record<string, string> = {
+    'Ç':'c','ç':'c','Ğ':'g','ğ':'g','İ':'i','I':'i','ı':'i','Ö':'o','ö':'o','Ş':'s','ş':'s','Ü':'u','ü':'u'
+  }
+  let out = ''
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i]
+    out += (map[ch] ?? ch)
+  }
+  return out.toLowerCase()
+}
+
 export function normalizePayType(v: any): { type: string; termDays: number | null } {
-  const t = lc(v).trim()
+  const t = lcTR(v).trim()
   if (!t) return { type: '', termDays: null }
   if (/(cek|çek|cheque|check|senet)/.test(t)) return { type: 'Check', termDays: 90 }
   if (/(kk|k\.k\.|kredi\s*kart|credit\s*card|card|kart|بطاقة|فيزا|كردت)/.test(t)) return { type: 'Card', termDays: 30 }
@@ -152,4 +166,14 @@ export function mode(arr: Array<number | null | undefined>, def: number): number
     if (freq[k] > bestCount) { best = Number(v); bestCount = freq[k] }
   }
   return best ?? def
+}
+
+// Improved detection that prefers Card for 'tek cekim' texts and uses word boundaries
+export function normalizePayType2(v: any): { type: string; termDays: number | null } {
+  const t = lcTR(v).trim()
+  if (!t) return { type: '', termDays: null }
+  if (/(\bkk\b|k\.k\.|kredi\s*kart|credit\s*card|\bkart\b|pos)/.test(t)) return { type: 'Card', termDays: 30 }
+  if (/(\bcek\b|cheque|\bcheck\b|\bsenet\b|\bvadeli\b)/.test(t)) return { type: 'Check', termDays: 90 }
+  if (/(\bpesin\b|cash|nakit)/.test(t)) return { type: 'Cash', termDays: 30 }
+  return { type: '', termDays: null }
 }

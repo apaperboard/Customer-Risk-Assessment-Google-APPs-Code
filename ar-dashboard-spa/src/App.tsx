@@ -460,6 +460,9 @@ function DebugPanel() {
   const payTypes: Record<string,number> = dbg.payTypes || {}
   const termCounts: Record<string,number> = dbg.invoiceTermCounts || {}
   const openingRowIndex: number | undefined = dbg.openingRowIndex
+  const payTermSummary: Record<string, Record<string, number>> = dbg.payTermSummary || {}
+  const termApply: any[] = dbg.termApply || []
+  const invoiceTermSamples: any[] = dbg.invoiceTermSamples || []
 
   return (
     <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fffef8', marginBottom: 16 }}>
@@ -498,6 +501,41 @@ function DebugPanel() {
             <div style={{ whiteSpace: 'pre-wrap' }}>{String(checkNoMatExamples[0]?.desc || '').slice(0, 200)}</div>
           </>
         )}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Pay Type Samples</div>
+        <ol>
+          {(dbg.payTypeSamples || []).slice(0,10).map((x:any,i:number)=> (
+            <li key={i} style={{ marginBottom: 4 }}>
+              <span style={{ color:'#555' }}>{String(x.payTypeRaw).slice(0,80)}</span>
+              {' '}→ <b>{String(x.norm || '')}</b>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Payment Expected Term Summary</div>
+        <div style={{ whiteSpace:'pre-wrap' }}>{Object.keys(payTermSummary).length ? JSON.stringify(payTermSummary) : 'n/a'}</div>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Term Applications (first 10)</div>
+        <ol>
+          {termApply.slice(0,10).map((x:any,i:number)=> (
+            <li key={i} style={{ marginBottom: 4 }}>
+              inv:{new Date(x.invoiceDate).toLocaleDateString()} apply:{new Date(x.applyDate).toLocaleDateString()} type:{x.payType||''} exp:{String(x.expectedTerm)} via:{x.via}
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Invoice Term Samples (first 10)</div>
+        <ol>
+          {invoiceTermSamples.slice(0,10).map((x:any,i:number)=> (
+            <li key={i} style={{ marginBottom: 4 }}>
+              {new Date(x.invoiceDate).toLocaleDateString()} | applied: [{(x.appliedTerms||[]).join(', ')}] → final: <b>{x.finalTerm}</b>
+            </li>
+          ))}
+        </ol>
       </div>
       {checkInspect.length > 0 && (
         <div style={{ marginTop: 10 }}>

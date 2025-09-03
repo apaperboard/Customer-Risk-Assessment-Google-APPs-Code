@@ -119,6 +119,29 @@ function normalizePayType_(v) {
   return { type: '', termDays: null };
 }
 
+// --- TR-aware overrides (appended) ---
+/** Improved Turkish diacritic normalization */
+function lc2_(s) {
+  var str = String(s == null ? '' : s);
+  var map = { 'Ç':'c','ç':'c','Ğ':'g','ğ':'g','İ':'i','I':'i','ı':'i','Ö':'o','ö':'o','Ş':'s','ş':'s','Ü':'u','ü':'u' };
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    var ch = str[i];
+    out += (map[ch] != null ? map[ch] : ch);
+  }
+  return out.toLowerCase();
+}
+
+/** Improved pay type detection using lc2_ */
+function normalizePayType2_(v) {
+  var t = lc2_(v).trim();
+  if (!t) return { type: '', termDays: null };
+  if (/(cek|çek|cheque|check|senet|vadeli)/.test(t)) return { type: 'Check', termDays: 90 };
+  if (/(\bkk\b|k\.k\.|kredi\s*kart|credit\s*card|card|\bkart\b)/.test(t)) return { type: 'Card', termDays: 30 };
+  if (/(\bpesin\b|cash|nakit)/.test(t)) return { type: 'Cash', termDays: 30 };
+  return { type: '', termDays: null };
+}
+
 /** Read Beginning Balance (same as before). */
 function readBeginningBalance_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -214,7 +237,7 @@ function readInput_() {
     if (isFinite(debit) && debit > 0) {
       if (!date) continue;
       var payTypeRaw = (cPayTp > 0) ? row[cPayTp - 1] : '';
-      var norm = normalizePayType_(payTypeRaw);
+      var norm = normalizePayType2_(payTypeRaw);
       payments.push({
         paymentDate: date,
         amount: debit,
@@ -752,7 +775,7 @@ function showInputDebug() {
     var desc    = (cDesc>0) ? row[cDesc-1] : '';
     var descDate= extractDateFromText_(desc);
     var rawPay  = (cPayTp>0) ? row[cPayTp-1] : '';
-    var norm    = normalizePayType_(rawPay);
+  var norm    = normalizePayType2_(rawPay);
     out.push([
       i+2,
       rawDate,
