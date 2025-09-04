@@ -534,9 +534,27 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   add(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
   add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
   add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
-  add(compLowerBetter(blendedDaysToPay, 20, 35), 0.20)
   add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
   add(compLowerBetter(pctChecksHandedOver30, 0.30, 0.60), 0.20)
+  // Include Overdue Balance as % of Credit Limit in scoring (use neutral 'Average' band multiplier for provisional limit)
+  const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
+    const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
+    return s + ((ageDays > inv.term) ? inv.remaining : 0)
+  }, 0)
+  const maturitySamplesForScore: { days: number; expected: number }[] = []
+  for (const p of payments) {
+    if (p.maturityDate) {
+      const d = Math.round((+p.maturityDate - +p.paymentDate) / 86400000)
+      if (isFinite(d) && d > 0) maturitySamplesForScore.push({ days: d, expected: (p.expectedTerm != null ? p.expectedTerm : 30) })
+    }
+  }
+  const mostCommonTermForScore = maturitySamplesForScore.length ? mode(maturitySamplesForScore.map(m => m.expected), 30) : 30
+  const baseMultAvgBand = (mostCommonTermForScore === 90) ? 2.75 : 1.5
+  const creditLimitForScore: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMultAvgBand) : ''
+  const pctOverdueVsCreditLimitScore: number | '' = (creditLimitForScore !== '' && (creditLimitForScore as number) > 0)
+    ? (overdueOutstandingTermScore / (creditLimitForScore as number))
+    : ''
+  add(compLowerBetter(pctOverdueVsCreditLimitScore, 0, 0.20), 0.20)
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
@@ -589,7 +607,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const pctOverdueVsCreditLimit: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
     ? (overdueOutstandingTerm / (creditLimit as number))
     : ''
-  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0.30, 0.60) })
+  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0, 0.20) })
   // Include purchases and credit limit like original Apps Script
   metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
   metrics.push({ label: 'Credit Limit (TRY)', value: creditLimit, assess: '' })
