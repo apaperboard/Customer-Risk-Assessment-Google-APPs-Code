@@ -458,7 +458,13 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const sumAgeWeighted = unpaid.reduce((s,inv) => s + ((+today - +inv.invoiceDate)/86400000) * inv.remaining, 0)
   const sumRemaining = unpaid.reduce((s,inv) => s + inv.remaining, 0)
   const avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : ''
-  const overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : ''
+  // Change to amount-weighted overdue share (30-day handover rule)
+  const totalUnpaid = unpaid.reduce((s,inv) => s + inv.remaining, 0)
+  const overdueUnpaidAmt = unpaid.reduce((s,inv) => {
+    const age = Math.floor(((+today - +inv.invoiceDate)/86400000))
+    return s + ((age > 30) ? inv.remaining : 0)
+  }, 0)
+  const overdueRate = totalUnpaid > 0 ? (overdueUnpaidAmt / totalUnpaid) : ''
   const blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce((s,inv) => {
     const end = (inv.paid && inv.closingDate) ? inv.closingDate! : today
     return s + ((+end - +inv.invoiceDate)/86400000)

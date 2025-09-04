@@ -406,8 +406,14 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     }
   }
   var avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : "";
-  // Percent as a fraction (0..1); formatting handles display as %
-  var overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : "";
+  // Percent as a fraction (0..1); now amount-weighted by unpaid balances (30-day handover rule)
+  var overdueUnpaidAmt = 0;
+  for (var ou = 0; ou < unpaid.length; ou++) {
+    var invou = unpaid[ou];
+    var ageou = Math.floor((today - invou.invoiceDate)/86400000);
+    if (ageou > 30) overdueUnpaidAmt += invou.remaining;
+  }
+  var overdueRate = (sumRemaining > 0) ? (overdueUnpaidAmt / sumRemaining) : "";
   var blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce(function(s,inv){ var end = (inv.paid && inv.closingDate) ? inv.closingDate : today; return s + ((end - inv.invoiceDate)/86400000); },0)/displayInvoices.length : "";
 
   // Per-payment expected vs maturity
