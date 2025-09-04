@@ -535,13 +535,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     ? (maturitySamples.filter(m => m.days > m.expected).length / maturitySamples.length)
     : ''
 
-  // Handover-basis: % of invoices paid after term using closing (handover) date
-  const pctInvoicesPaidAfterTermHandover: number | '' = paid.length
-    ? (paid.filter(inv => {
-        const d2p = Math.round(((+inv.closingDate!) - (+inv.invoiceDate)) / 86400000)
-        return d2p > inv.term
-      }).length / paid.length)
-    : ''
 
   // Settlement-basis metrics: compute settlement date per paid invoice
   type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
@@ -585,7 +578,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
   metrics.push({ label: '% of Checks Over Expected Term (Handover→Maturity)', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
   metrics.push({ label: '% of Checks Handed Over >30 Days (Invoice→Handover)', value: pctChecksHandedOver30, assess: assessLower(pctChecksHandedOver30, 0.30, 0.60) })
-  metrics.push({ label: '% of Invoices Paid After Term (Handover)', value: pctInvoicesPaidAfterTermHandover, assess: assessLower(pctInvoicesPaidAfterTermHandover, 0.30, 0.60) })
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.30, 0.60) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })

@@ -575,7 +575,6 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     ["Avg Check Maturity Over Expected (Days)",                    avgCheckMaturityOverBy,      assAvgMaturity],
     ["% of Checks Over Expected Term (Handover→Maturity)",        pctChecksOverTerm,           assPctChecksOverTerm],
     ["% of Checks Handed Over >30 Days (Invoice→Handover)",       pctChecksHandedOver30,       ""],
-    ["% of Invoices Paid After Term (Handover)",                   (paid.length ? (paid.filter(function(inv){ var d2p = Math.round((inv.closingDate - inv.invoiceDate)/86400000); return d2p > inv.term; }).length / paid.length) : ""),  ""],
     ["Average Days to Settle (Settlement)",                         (settledPaid.length ? Math.round(avgDaysToSettle) : ""),             ""],
     ["% of Invoices Settled After Term (Settlement)",              pctInvoicesSettledAfterTerm, ""],
     ["Customer Risk Rating",                           riskBand,                    ""],
@@ -643,7 +642,7 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     if (label === 'Beginning Balance (TRY)' || label === 'Average Monthly Purchases (TRY)' || label === 'Credit Limit (TRY)') {
       dash.getRange(2+mr, 2).setNumberFormat(currencyFormat);
     }
-    if (label === '% of Unpaid Invoices Overdue' || label === '% of Checks Over Expected Term (Handover→Maturity)' || label === '% of Checks Handed Over >30 Days (Invoice→Handover)' || label === '% of Invoices Paid After Term (Handover)' || label === '% of Invoices Settled After Term (Settlement)') {
+    if (label === '% of Unpaid Invoices Overdue' || label === '% of Checks Over Expected Term (Handover→Maturity)' || label === '% of Checks Handed Over >30 Days (Invoice→Handover)' || label === '% of Invoices Settled After Term (Settlement)') {
       dash.getRange(2+mr, 2).setNumberFormat("0.0% ");
     }
     if (dayLabels[label]) {
