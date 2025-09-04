@@ -68,6 +68,14 @@ export default function App() {
   }
   // Extra labels added later (override when present)
   const metricNamesExtra: Record<string, { en: string; tr: string; ar: string }> = {
+    // New handover/settlement labels
+    'Average Days to Pay (Handover)': { en: 'Average Days to Pay (Handover)', tr: 'Ortalama Ödeme Günleri (Teslim)', ar: 'متوسط أيام الدفع (عند التسليم)' },
+    'Average Check Maturity Duration (Invoice→Maturity)': { en: 'Average Check Maturity Duration (Invoice→Maturity)', tr: 'Ortalama Çek Vade Süresi (Fatura→Vade)', ar: 'متوسط مدة استحقاق الشيك (من الفاتورة إلى الاستحقاق)' },
+    '% of Checks Over Expected Term (Handover→Maturity)': { en: '% of Checks Over Expected Term (Handover→Maturity)', tr: '% Vade Beklentisini Aşan Çekler (Teslim→Vade)', ar: '% الشيكات التي تجاوزت مدة الاستحقاق المتوقعة (من التسليم إلى الاستحقاق)' },
+    '% of Checks Handed Over >30 Days (Invoice→Handover)': { en: '% of Checks Handed Over >30 Days (Invoice→Handover)', tr: '% 30 Günden Sonra Teslim Edilen Çek Tutarı (Fatura→Teslim)', ar: 'نسبة مبالغ الشيكات المُسلَّمة بعد أكثر من 30 يومًا (من الفاتورة إلى التسليم)' },
+    '% of Invoices Paid After Term (Handover)': { en: '% of Invoices Paid After Term (Handover)', tr: '% Vadesinden Sonra Ödenen Faturalar (Teslim)', ar: 'نسبة الفواتير المسددة بعد الاستحقاق (عند التسليم)' },
+    'Average Days to Settle (Settlement)': { en: 'Average Days to Settle (Settlement)', tr: 'Ortalama Tahsil Günleri (Tahsil)', ar: 'متوسط أيام التسوية (التسوية)' },
+    '% of Invoices Settled After Term (Settlement)': { en: '% of Invoices Settled After Term (Settlement)', tr: '% Vadesinden Sonra Tahsil Edilen Faturalar (Tahsil)', ar: 'نسبة الفواتير التي سُويت بعد الاستحقاق (التسوية)' },
     '% of Checks Over Term': { en: '% of Checks Over Term', tr: '% Vadesi Aşılmış Çekler', ar: '% من الشيكات فوق الأجل' },
     '% of Payments Delivered After Term': { en: '% of Payments Delivered After Term', tr: '% Vadeden Sonra Teslim Edilen Ödemeler', ar: '% المدفوعات بعد الأجل' },
     'Average Monthly Purchases (TRY)': { en: 'Average Monthly Purchases (TRY)', tr: 'Aylık Ortalama Alımlar (TRY)', ar: 'متوسط المشتريات الشهري (TRY)' },

@@ -13,6 +13,7 @@ export type Invoice = {
   _synthetic?: boolean
   _appliedTerms?: number[]
   _appliedChecks?: { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null }[]
+  _appliedPays?: { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }[]
 }
 
 export type Payment = {
@@ -377,6 +378,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (p.expectedTerm != null) {
         (inv._appliedTerms ||= []).push(p.expectedTerm)
       }
+      // Track all applied payments for settlement-basis metrics
+      (inv._appliedPays ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null, payType: p.payType })
       if (p.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null })
       }
@@ -416,6 +419,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (adv.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null })
       }
+      // Track applied prepayment for settlement-basis metrics
+      (inv._appliedPays ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null, payType: adv.payType })
       try {
         const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
         const arr = (dbg.termApply ||= [])
@@ -524,12 +529,40 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     ? (maturitySamples.filter(m => m.days > m.expected).length / maturitySamples.length)
     : ''
 
-  // All payment types: % of invoices delivered (closed) after their term using handover lag
-  const pctPaymentsDeliveredAfterTerm: number | '' = paid.length
+  // Handover-basis: % of invoices paid after term using closing (handover) date
+  const pctInvoicesPaidAfterTermHandover: number | '' = paid.length
     ? (paid.filter(inv => {
         const d2p = Math.round(((+inv.closingDate!) - (+inv.invoiceDate)) / 86400000)
         return d2p > inv.term
       }).length / paid.length)
+    : ''
+
+  // Settlement-basis metrics: compute settlement date per paid invoice
+  type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
+  const settleDateFor = (inv: Invoice): Date | null => {
+    if (!inv.paid) return null
+    const candidates: Date[] = []
+    if (inv._appliedPays && inv._appliedPays.length) {
+      for (const ap of inv._appliedPays as AppliedPay[]) {
+        if (ap.payType === 'Check') {
+          candidates.push(ap.maturityDate || ap.paymentDate)
+        } else {
+          // Card/Cash: same-day settlement as handover
+          candidates.push(ap.paymentDate)
+        }
+      }
+    } else if (inv.closingDate) {
+      candidates.push(inv.closingDate)
+    }
+    if (!candidates.length) return null
+    return candidates.reduce((a,b) => (+a > +b ? a : b))
+  }
+  const settledPaid = paid.map(inv => ({ inv, sd: settleDateFor(inv) })).filter(x => !!x.sd) as { inv: Invoice; sd: Date }[]
+  const avgDaysToSettle: number | '' = settledPaid.length
+    ? (settledPaid.reduce((s,x) => s + Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000), 0) / settledPaid.length)
+    : ''
+  const pctInvoicesSettledAfterTerm: number | '' = settledPaid.length
+    ? (settledPaid.filter(x => (Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000) > x.inv.term))).length / settledPaid.length
     : ''
 
   // Metrics rows
@@ -539,13 +572,16 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const metrics: { label: string; value: any; assess: string }[] = []
   const roundDays = (x: any) => (typeof x === 'number' ? Math.round(x) : x)
-  metrics.push({ label: 'Average Days to Pay (Paid Only)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
+  metrics.push({ label: 'Average Days to Pay (Handover)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
   metrics.push({ label: 'Weighted Avg Age of Unpaid Invoices (Days)', value: roundDays(avgAgeUnpaid), assess: assessLower(avgAgeUnpaid, 10, 20) })
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
-  metrics.push({ label: 'Average Check Maturity Duration (Days)', value: roundDays(avgCheckMaturityDuration), assess: '' })
-  metrics.push({ label: 'Avg Maturity Over By (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
-  metrics.push({ label: '% of Checks Over Term', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
-  metrics.push({ label: '% of Payments Delivered After Term', value: pctPaymentsDeliveredAfterTerm, assess: assessLower(pctPaymentsDeliveredAfterTerm, 0.30, 0.60) })
+  metrics.push({ label: 'Average Check Maturity Duration (Invoice→Maturity)', value: roundDays(avgCheckMaturityDuration), assess: '' })
+  metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
+  metrics.push({ label: '% of Checks Over Expected Term (Handover→Maturity)', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
+  metrics.push({ label: '% of Checks Handed Over >30 Days (Invoice→Handover)', value: pctChecksHandedOver30, assess: assessLower(pctChecksHandedOver30, 0.30, 0.60) })
+  metrics.push({ label: '% of Invoices Paid After Term (Handover)', value: pctInvoicesPaidAfterTermHandover, assess: assessLower(pctInvoicesPaidAfterTermHandover, 0.30, 0.60) })
+  metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
+  metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.30, 0.60) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
   // New metric: overdue balance as a percentage of assigned credit limit (term-based overdue)
   const overdueOutstandingTerm = unpaid.reduce((s, inv) => {

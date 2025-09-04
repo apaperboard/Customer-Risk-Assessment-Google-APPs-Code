@@ -339,6 +339,9 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
         if (!inv._appliedTerms) inv._appliedTerms = [];
         inv._appliedTerms.push(p.expectedTerm);
       }
+      // Track all applied payments for settlement-basis metrics
+      if (!inv._appliedPays) inv._appliedPays = [];
+      inv._appliedPays.push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null, payType: p.payType || '' });
       // Track applied checks for check-specific metrics (handover lag and maturity duration)
       if (p.payType === 'Check') {
         if (!inv._appliedChecks) inv._appliedChecks = [];
@@ -454,6 +457,33 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
   var avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : "";
   var avgCheckMaturityOverBy = (avgCheckMaturityDuration !== "") ? (avgCheckMaturityDuration - 90) : "";
 
+  // Settlement-basis (clearing) metrics
+  function _settlementDateFor(inv) {
+    if (!(inv && inv.paid)) return null;
+    var cands = [];
+    if (inv._appliedPays && inv._appliedPays.length) {
+      for (var ii = 0; ii < inv._appliedPays.length; ii++) {
+        var ap = inv._appliedPays[ii];
+        if (ap && ap.payType === 'Check') { cands.push(ap.maturityDate || ap.paymentDate); }
+        else if (ap) { cands.push(ap.paymentDate); }
+      }
+    } else if (inv.closingDate) {
+      cands.push(inv.closingDate);
+    }
+    if (!cands.length) return null;
+    var max = cands[0];
+    for (var jj = 1; jj < cands.length; jj++) { if (cands[jj] > max) max = cands[jj]; }
+    return max;
+  }
+  var _settled = [];
+  for (var pi = 0; pi < paid.length; pi++) {
+    var invp = paid[pi];
+    var sd = _settlementDateFor(invp);
+    if (sd) _settled.push({ inv: invp, sd: sd });
+  }
+  var avgDaysToSettle = _settled.length ? (_settled.reduce(function(s,x){ return s + Math.round((x.sd - x.inv.invoiceDate)/86400000); },0) / _settled.length) : "";
+  var pctInvoicesSettledAfterTerm = _settled.length ? (_settled.filter(function(x){ return Math.round((x.sd - x.inv.invoiceDate)/86400000) > x.inv.term; }).length / _settled.length) : "";
+
   // Dashboard Avg Days to Pay: use payment handover lag (consistent for all types)
   var avgDaysToPayForDash = avgPaymentLagDays;
 
@@ -530,26 +560,30 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
   var metricsHeader = [["Metric","Value","Assessment"]];
   var metricsRows = [
     ["Beginning Balance (TRY)",                        beginningBalance,            ""],
-    ["Average Days to Pay (Paid Only)",                avgDaysToPayForDash,         assAvgDaysToPay],
+    ["Average Days to Pay (Handover)",                avgDaysToPayForDash,         assAvgDaysToPay],
     ["Weighted Avg Age of Unpaid Invoices (Days)",     avgAgeUnpaid,                assAvgAgeUnpaid],
     ["% of Unpaid Invoices Overdue",                   overdueRate,                 assOverdueRate],
     ["Blended Average Days to Pay",                    blendedDaysToPay,            assBlendedDaysToPay],
     ["Average Monthly Purchases (TRY)",                avgMonthlyPurchases,         ""],
-    ["Average Check Maturity Duration (Days)",         avgCheckMaturityDuration,    ""],
-    ["Avg Maturity Over By (Days)",                    avgCheckMaturityOverBy,      assAvgMaturity],
-    ["% of Payments Over Term",                        pctChecksOverTerm,           assPctChecksOverTerm],
-    ["% Checks Handed over 30 Days",                   pctChecksHandedOver30,       ""],
+    ["Average Check Maturity Duration (Invoice→Maturity)",         avgCheckMaturityDuration,    ""],
+    ["Avg Check Maturity Over Expected (Days)",                    avgCheckMaturityOverBy,      assAvgMaturity],
+    ["% of Checks Over Expected Term (Handover→Maturity)",        pctChecksOverTerm,           assPctChecksOverTerm],
+    ["% of Checks Handed Over >30 Days (Invoice→Handover)",       pctChecksHandedOver30,       ""],
+    ["% of Invoices Paid After Term (Handover)",                   (paid.length ? (paid.filter(function(inv){ var d2p = Math.round((inv.closingDate - inv.invoiceDate)/86400000); return d2p > inv.term; }).length / paid.length) : ""),  ""],
+    ["Average Days to Settle (Settlement)",                         (settledPaid.length ? Math.round(avgDaysToSettle) : ""),             ""],
+    ["% of Invoices Settled After Term (Settlement)",              pctInvoicesSettledAfterTerm, ""],
     ["Customer Risk Rating",                           riskBand,                    ""],
     ["Credit Limit (TRY)",                             creditLimit,                 ""]
   ];
 
   // Round day-based metrics to whole days and remove thousands separators via number format later
   var dayLabels = {
-    'Average Days to Pay (Paid Only)': true,
+    'Average Days to Pay (Handover)': true,
     'Weighted Avg Age of Unpaid Invoices (Days)': true,
     'Blended Average Days to Pay': true,
-    'Average Check Maturity Duration (Days)': true,
-    'Avg Maturity Over By (Days)': true
+    'Average Check Maturity Duration (Invoice→Maturity)': true,
+    'Avg Check Maturity Over Expected (Days)': true,
+    'Average Days to Settle (Settlement)': true
   };
   for (var mridx = 0; mridx < metricsRows.length; mridx++) {
     var lbl = metricsRows[mridx][0];
@@ -603,7 +637,7 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     if (label === 'Beginning Balance (TRY)' || label === 'Average Monthly Purchases (TRY)' || label === 'Credit Limit (TRY)') {
       dash.getRange(2+mr, 2).setNumberFormat(currencyFormat);
     }
-    if (label === '% of Unpaid Invoices Overdue' || label === '% of Payments Over Term' || label === '% Checks Handed over 30 Days') {
+    if (label === '% of Unpaid Invoices Overdue' || label === '% of Checks Over Expected Term (Handover→Maturity)' || label === '% of Checks Handed Over >30 Days (Invoice→Handover)' || label === '% of Invoices Paid After Term (Handover)' || label === '% of Invoices Settled After Term (Settlement)') {
       dash.getRange(2+mr, 2).setNumberFormat("0.0% ");
     }
     if (dayLabels[label]) {
