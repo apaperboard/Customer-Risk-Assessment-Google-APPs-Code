@@ -495,6 +495,35 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const monthsInPeriod = startDate ? ((+today - +startDate) / (86400000 * 30.44)) : 0
   const avgMonthlyPurchases: number | '' = (monthsInPeriod > 0) ? (totalInvoicedInPeriod / monthsInPeriod) : ''
 
+  // Settlement-basis metrics: compute settlement date per paid invoice (needed for scoring)
+  type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
+  const settleDateFor = (inv: Invoice): Date | null => {
+    if (!inv.paid) return null
+    const candidates: Date[] = []
+    if (inv._appliedPays && inv._appliedPays.length) {
+      for (const ap of inv._appliedPays as AppliedPay[]) {
+        if (ap.payType === 'Check') {
+          candidates.push(ap.maturityDate || ap.paymentDate)
+        } else {
+          // Card/Cash: same-day settlement as handover
+          candidates.push(ap.paymentDate)
+        }
+      }
+    } else if (inv.closingDate) {
+      candidates.push(inv.closingDate)
+    }
+    if (!candidates.length) return null
+    return candidates.reduce((a,b) => (+a > +b ? a : b))
+  }
+  const settledPaid = paid.map(inv => ({ inv, sd: settleDateFor(inv) })).filter(x => !!x.sd) as { inv: Invoice; sd: Date }[]
+  const avgDaysToSettle: number | '' = settledPaid.length
+    ? (settledPaid.reduce((s,x) => s + Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000), 0) / settledPaid.length)
+    : ''
+  const pctInvoicesSettledAfterTerm: number | '' = settledPaid.length
+    ? (settledPaid.filter(x => (Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000) > x.inv.term))).length / settledPaid.length
+    : ''
+  const avgCheckMaturityOverBy: number | '' = (avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
+
   // Score (weighted)
   function compLowerBetter(val: any, goodMax: number, avgMax: number) {
     if (val === '') return null
@@ -535,33 +564,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     : ''
 
 
-  // Settlement-basis metrics: compute settlement date per paid invoice
-  type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
-  const settleDateFor = (inv: Invoice): Date | null => {
-    if (!inv.paid) return null
-    const candidates: Date[] = []
-    if (inv._appliedPays && inv._appliedPays.length) {
-      for (const ap of inv._appliedPays as AppliedPay[]) {
-        if (ap.payType === 'Check') {
-          candidates.push(ap.maturityDate || ap.paymentDate)
-        } else {
-          // Card/Cash: same-day settlement as handover
-          candidates.push(ap.paymentDate)
-        }
-      }
-    } else if (inv.closingDate) {
-      candidates.push(inv.closingDate)
-    }
-    if (!candidates.length) return null
-    return candidates.reduce((a,b) => (+a > +b ? a : b))
-  }
-  const settledPaid = paid.map(inv => ({ inv, sd: settleDateFor(inv) })).filter(x => !!x.sd) as { inv: Invoice; sd: Date }[]
-  const avgDaysToSettle: number | '' = settledPaid.length
-    ? (settledPaid.reduce((s,x) => s + Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000), 0) / settledPaid.length)
-    : ''
-  const pctInvoicesSettledAfterTerm: number | '' = settledPaid.length
-    ? (settledPaid.filter(x => (Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000) > x.inv.term))).length / settledPaid.length
-    : ''
+  // (moved earlier for scoring)
 
   // Metrics rows
   function assessLower(val: any, goodMax: number, avgMax: number) {
@@ -574,7 +577,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Weighted Avg Age of Unpaid Invoices (Days)', value: roundDays(avgAgeUnpaid), assess: assessLower(avgAgeUnpaid, 10, 20) })
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
   // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
-  const avgCheckMaturityOverBy: number | '' = (avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
   metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.30, 0.60) })

@@ -461,8 +461,8 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
   // fraction 0..1
   var pctChecksHandedOver30 = (checkTotalAmt > 0) ? (((checkTotalAmt - checkWithin30Amt) / checkTotalAmt)) : "";
   var avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : "";
-  // Recode: use settlement basis average days to settle (all types) minus 90
-  var avgCheckMaturityOverBy = (avgDaysToSettle !== "") ? (avgDaysToSettle - 90) : "";
+  // Placeholder; will set after computing avgDaysToSettle
+  var avgCheckMaturityOverBy = "";
 
   // Settlement-basis (clearing) metrics
   function _settlementDateFor(inv) {
@@ -490,6 +490,8 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
   }
   var avgDaysToSettle = _settled.length ? (_settled.reduce(function(s,x){ return s + Math.round((x.sd - x.inv.invoiceDate)/86400000); },0) / _settled.length) : "";
   var pctInvoicesSettledAfterTerm = _settled.length ? (_settled.filter(function(x){ return Math.round((x.sd - x.inv.invoiceDate)/86400000) > x.inv.term; }).length / _settled.length) : "";
+  // Now compute maturity over by using settlement-basis average
+  avgCheckMaturityOverBy = (avgDaysToSettle !== "") ? (avgDaysToSettle - 90) : "";
 
   // Dashboard Avg Days to Pay: use payment handover lag (consistent for all types)
   var avgDaysToPayForDash = avgPaymentLagDays;
