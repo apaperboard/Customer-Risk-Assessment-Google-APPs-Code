@@ -489,7 +489,6 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgCheckHandoverLag = (checkTotalAmt > 0) ? (checkLagWeightedSum / checkTotalAmt) : ''
   const pctChecksHandedOver30 = (checkTotalAmt > 0) ? ((checkTotalAmt - checkWithin30Amt)/checkTotalAmt) : ''
   const avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : ''
-  const avgCheckMaturityOverBy = (avgCheckMaturityDuration !== '') ? ((avgCheckMaturityDuration as number) - 90) : ''
 
   // Avg Monthly Purchases (from analysis period start)
   const totalInvoicedInPeriod = displayInvoices.reduce((s, inv) => s + inv.amount, 0)
@@ -574,10 +573,9 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Average Days to Pay (Handover)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
   metrics.push({ label: 'Weighted Avg Age of Unpaid Invoices (Days)', value: roundDays(avgAgeUnpaid), assess: assessLower(avgAgeUnpaid, 10, 20) })
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
-  metrics.push({ label: 'Average Check Maturity Duration (Invoice→Maturity)', value: roundDays(avgCheckMaturityDuration), assess: '' })
+  // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
+  const avgCheckMaturityOverBy: number | '' = (avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
   metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
-  metrics.push({ label: '% of Checks Over Expected Term (Handover→Maturity)', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
-  metrics.push({ label: '% of Checks Handed Over >30 Days (Invoice→Handover)', value: pctChecksHandedOver30, assess: assessLower(pctChecksHandedOver30, 0.30, 0.60) })
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.30, 0.60) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })

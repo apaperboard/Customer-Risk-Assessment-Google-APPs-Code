@@ -461,7 +461,8 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
   // fraction 0..1
   var pctChecksHandedOver30 = (checkTotalAmt > 0) ? (((checkTotalAmt - checkWithin30Amt) / checkTotalAmt)) : "";
   var avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : "";
-  var avgCheckMaturityOverBy = (avgCheckMaturityDuration !== "") ? (avgCheckMaturityDuration - 90) : "";
+  // Recode: use settlement basis average days to settle (all types) minus 90
+  var avgCheckMaturityOverBy = (avgDaysToSettle !== "") ? (avgDaysToSettle - 90) : "";
 
   // Settlement-basis (clearing) metrics
   function _settlementDateFor(inv) {
@@ -571,10 +572,7 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     ["% of Unpaid Invoices Overdue",                   overdueRate,                 assOverdueRate],
     ["Blended Average Days to Pay",                    blendedDaysToPay,            assBlendedDaysToPay],
     ["Average Monthly Purchases (TRY)",                avgMonthlyPurchases,         ""],
-    ["Average Check Maturity Duration (Invoice→Maturity)",         avgCheckMaturityDuration,    ""],
     ["Avg Check Maturity Over Expected (Days)",                    avgCheckMaturityOverBy,      assAvgMaturity],
-    ["% of Checks Over Expected Term (Handover→Maturity)",        pctChecksOverTerm,           assPctChecksOverTerm],
-    ["% of Checks Handed Over >30 Days (Invoice→Handover)",       pctChecksHandedOver30,       ""],
     ["Average Days to Settle (Settlement)",                         (settledPaid.length ? Math.round(avgDaysToSettle) : ""),             ""],
     ["% of Invoices Settled After Term (Settlement)",              pctInvoicesSettledAfterTerm, ""],
     ["Customer Risk Rating",                           riskBand,                    ""],
@@ -586,7 +584,6 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     'Average Days to Pay (Handover)': true,
     'Weighted Avg Age of Unpaid Invoices (Days)': true,
     'Blended Average Days to Pay': true,
-    'Average Check Maturity Duration (Invoice→Maturity)': true,
     'Avg Check Maturity Over Expected (Days)': true,
     'Average Days to Settle (Settlement)': true
   };
@@ -642,7 +639,7 @@ function runAnalysisCore_(invoices, payments, startDate, beginningBalance) {
     if (label === 'Beginning Balance (TRY)' || label === 'Average Monthly Purchases (TRY)' || label === 'Credit Limit (TRY)') {
       dash.getRange(2+mr, 2).setNumberFormat(currencyFormat);
     }
-    if (label === '% of Unpaid Invoices Overdue' || label === '% of Checks Over Expected Term (Handover→Maturity)' || label === '% of Checks Handed Over >30 Days (Invoice→Handover)' || label === '% of Invoices Settled After Term (Settlement)') {
+    if (label === '% of Unpaid Invoices Overdue' || label === '% of Invoices Settled After Term (Settlement)') {
       dash.getRange(2+mr, 2).setNumberFormat("0.0% ");
     }
     if (dayLabels[label]) {
