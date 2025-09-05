@@ -522,7 +522,12 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const pctInvoicesSettledAfterTerm: number | '' = settledPaid.length
     ? (settledPaid.filter(x => (Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000) > x.inv.term))).length / settledPaid.length
     : ''
-  const avgCheckMaturityOverBy: number | '' = (avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
+  // If majority of payments are Card/Cash (by amount), suppress settlement-based and maturity-over metrics
+  const totalPayAmt = payments.reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkPayAmt = payments.filter(p => p.payType === 'Check').reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const majorityCardCash = (totalPayAmt > 0) ? ((checkPayAmt / totalPayAmt) < 0.5) : false
+  const avgDaysToSettleDisplay: number | '' = majorityCardCash ? '' : avgDaysToSettle
+  const avgCheckMaturityOverBy: number | '' = (!majorityCardCash && avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
 
   // Score (weighted)
   function compLowerBetter(val: any, goodMax: number, avgMax: number) {
@@ -597,7 +602,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
   // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
   metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
-  metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
+  metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettleDisplay), assess: assessLower(avgDaysToSettleDisplay, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.20, 0.40) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
   // New metric: overdue balance as a percentage of assigned credit limit (term-based overdue)
