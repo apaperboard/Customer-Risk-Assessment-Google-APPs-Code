@@ -497,16 +497,27 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
 
   // Settlement-basis metrics: compute settlement date per paid invoice (needed for scoring)
   type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
+  // Determine payment mix to adjust settlement logic
+  const totalPayAmtAll = payments.reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkPayAmtAll = payments.filter(p => p.payType === 'Check').reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkMajority = (totalPayAmtAll > 0) ? ((checkPayAmtAll / totalPayAmtAll) >= 0.5) : false
+
   const settleDateFor = (inv: Invoice): Date | null => {
     if (!inv.paid) return null
     const candidates: Date[] = []
     if (inv._appliedPays && inv._appliedPays.length) {
       for (const ap of inv._appliedPays as AppliedPay[]) {
-        if (ap.payType === 'Check') {
-          candidates.push(ap.maturityDate || ap.paymentDate)
+        if (checkMajority) {
+          // For check-majority customers, ignore non-check same-day payments that would drag averages down
+          if (ap.maturityDate) { candidates.push(ap.maturityDate) }
+          else if (ap.payType === 'Check') { candidates.push(ap.paymentDate) }
+          else { /* skip card/cash/transfer */ }
         } else {
-          // Card/Cash: same-day settlement as handover
-          candidates.push(ap.paymentDate)
+          if (ap.payType === 'Check') {
+            candidates.push(ap.maturityDate || ap.paymentDate)
+          } else {
+            candidates.push(ap.paymentDate)
+          }
         }
       }
     } else if (inv.closingDate) {
