@@ -535,7 +535,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
   add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
   add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
-  add(compLowerBetter(pctChecksHandedOver30, 0.30, 0.60), 0.20)
+  // Settlement lateness share now included in scoring (not handover checks metric)
+  add(compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40), 0.20)
   // Include Overdue Balance as % of Credit Limit in scoring (use neutral 'Average' band multiplier for provisional limit)
   const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
     const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
@@ -554,7 +555,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const pctOverdueVsCreditLimitScore: number | '' = (creditLimitForScore !== '' && (creditLimitForScore as number) > 0)
     ? (overdueOutstandingTermScore / (creditLimitForScore as number))
     : ''
-  add(compLowerBetter(pctOverdueVsCreditLimitScore, 0, 0.20), 0.20)
+  add(compLowerBetter(pctOverdueVsCreditLimitScore, 0, 0.10), 0.20)
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
@@ -597,7 +598,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
   metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettle), assess: assessLower(avgDaysToSettle, 20, 40) })
-  metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.30, 0.60) })
+  metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.20, 0.40) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
   // New metric: overdue balance as a percentage of assigned credit limit (term-based overdue)
   const overdueOutstandingTerm = unpaid.reduce((s, inv) => {
@@ -607,7 +608,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const pctOverdueVsCreditLimit: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
     ? (overdueOutstandingTerm / (creditLimit as number))
     : ''
-  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0, 0.20) })
+  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0, 0.10) })
   // Include purchases and credit limit like original Apps Script
   metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
   metrics.push({ label: 'Credit Limit (TRY)', value: creditLimit, assess: '' })
