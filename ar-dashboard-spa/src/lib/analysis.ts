@@ -13,6 +13,7 @@ export type Invoice = {
   _synthetic?: boolean
   _appliedTerms?: number[]
   _appliedChecks?: { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null }[]
+  _appliedPays?: { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }[]
 }
 
 export type Payment = {
@@ -377,6 +378,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (p.expectedTerm != null) {
         (inv._appliedTerms ||= []).push(p.expectedTerm)
       }
+      // Track all applied payments for settlement-basis metrics
+      (inv._appliedPays ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null, payType: p.payType })
       if (p.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: p.paymentDate, maturityDate: p.maturityDate || null })
       }
@@ -416,6 +419,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
       if (adv.payType === 'Check') {
         (inv._appliedChecks ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null })
       }
+      // Track applied prepayment for settlement-basis metrics
+      (inv._appliedPays ||= []).push({ amount: applied, invoiceDate: inv.invoiceDate, paymentDate: adv.date, maturityDate: adv.maturityDate || null, payType: adv.payType })
       try {
         const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
         const arr = (dbg.termApply ||= [])
@@ -453,7 +458,13 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const sumAgeWeighted = unpaid.reduce((s,inv) => s + ((+today - +inv.invoiceDate)/86400000) * inv.remaining, 0)
   const sumRemaining = unpaid.reduce((s,inv) => s + inv.remaining, 0)
   const avgAgeUnpaid = (sumRemaining > 0) ? (sumAgeWeighted / sumRemaining) : ''
-  const overdueRate = unpaid.length ? (overdueUnpaidByHandover.length/unpaid.length) : ''
+  // Change to amount-weighted overdue share (30-day handover rule)
+  const totalUnpaid = unpaid.reduce((s,inv) => s + inv.remaining, 0)
+  const overdueUnpaidAmt = unpaid.reduce((s,inv) => {
+    const age = Math.floor(((+today - +inv.invoiceDate)/86400000))
+    return s + ((age > 30) ? inv.remaining : 0)
+  }, 0)
+  const overdueRate = totalUnpaid > 0 ? (overdueUnpaidAmt / totalUnpaid) : ''
   const blendedDaysToPay = displayInvoices.length ? displayInvoices.reduce((s,inv) => {
     const end = (inv.paid && inv.closingDate) ? inv.closingDate! : today
     return s + ((+end - +inv.invoiceDate)/86400000)
@@ -478,12 +489,56 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgCheckHandoverLag = (checkTotalAmt > 0) ? (checkLagWeightedSum / checkTotalAmt) : ''
   const pctChecksHandedOver30 = (checkTotalAmt > 0) ? ((checkTotalAmt - checkWithin30Amt)/checkTotalAmt) : ''
   const avgCheckMaturityDuration = (checkMatTotalAmt > 0) ? (checkMatWeightedSum / checkMatTotalAmt) : ''
-  const avgCheckMaturityOverBy = (avgCheckMaturityDuration !== '') ? ((avgCheckMaturityDuration as number) - 90) : ''
 
   // Avg Monthly Purchases (from analysis period start)
   const totalInvoicedInPeriod = displayInvoices.reduce((s, inv) => s + inv.amount, 0)
   const monthsInPeriod = startDate ? ((+today - +startDate) / (86400000 * 30.44)) : 0
   const avgMonthlyPurchases: number | '' = (monthsInPeriod > 0) ? (totalInvoicedInPeriod / monthsInPeriod) : ''
+
+  // Settlement-basis metrics: compute settlement date per paid invoice (needed for scoring)
+  type AppliedPay = { amount: number; invoiceDate: Date; paymentDate: Date; maturityDate: Date | null; payType: string }
+  // Determine payment mix to adjust settlement logic
+  const totalPayAmtAll = payments.reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkPayAmtAll = payments.filter(p => p.payType === 'Check').reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkMajority = (totalPayAmtAll > 0) ? ((checkPayAmtAll / totalPayAmtAll) >= 0.5) : false
+
+  const settleDateFor = (inv: Invoice): Date | null => {
+    if (!inv.paid) return null
+    const candidates: Date[] = []
+    if (inv._appliedPays && inv._appliedPays.length) {
+      for (const ap of inv._appliedPays as AppliedPay[]) {
+        if (checkMajority) {
+          // For check-majority customers, ignore non-check same-day payments that would drag averages down
+          if (ap.maturityDate) { candidates.push(ap.maturityDate) }
+          else if (ap.payType === 'Check') { candidates.push(ap.paymentDate) }
+          else { /* skip card/cash/transfer */ }
+        } else {
+          if (ap.payType === 'Check') {
+            candidates.push(ap.maturityDate || ap.paymentDate)
+          } else {
+            candidates.push(ap.paymentDate)
+          }
+        }
+      }
+    } else if (inv.closingDate) {
+      candidates.push(inv.closingDate)
+    }
+    if (!candidates.length) return null
+    return candidates.reduce((a,b) => (+a > +b ? a : b))
+  }
+  const settledPaid = paid.map(inv => ({ inv, sd: settleDateFor(inv) })).filter(x => !!x.sd) as { inv: Invoice; sd: Date }[]
+  const avgDaysToSettle: number | '' = settledPaid.length
+    ? (settledPaid.reduce((s,x) => s + Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000), 0) / settledPaid.length)
+    : ''
+  const pctInvoicesSettledAfterTerm: number | '' = settledPaid.length
+    ? (settledPaid.filter(x => (Math.round(((+x.sd) - (+x.inv.invoiceDate))/86400000) > x.inv.term))).length / settledPaid.length
+    : ''
+  // If majority of payments are Card/Cash (by amount), suppress settlement-based and maturity-over metrics
+  const totalPayAmt = payments.reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const checkPayAmt = payments.filter(p => p.payType === 'Check').reduce((s,p) => s + (isFinite(p.amount) ? p.amount : 0), 0)
+  const majorityCardCash = (totalPayAmt > 0) ? ((checkPayAmt / totalPayAmt) < 0.5) : false
+  const avgDaysToSettleDisplay: number | '' = majorityCardCash ? '' : avgDaysToSettle
+  const avgCheckMaturityOverBy: number | '' = (!majorityCardCash && avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
 
   // Score (weighted)
   function compLowerBetter(val: any, goodMax: number, avgMax: number) {
@@ -495,9 +550,28 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   add(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
   add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
   add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
-  add(compLowerBetter(blendedDaysToPay, 20, 35), 0.20)
   add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
-  add(compLowerBetter(pctChecksHandedOver30, 0.30, 0.60), 0.20)
+  // Settlement lateness share now included in scoring (not handover checks metric)
+  add(compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40), 0.20)
+  // Include Overdue Balance as % of Credit Limit in scoring (use neutral 'Average' band multiplier for provisional limit)
+  const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
+    const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
+    return s + ((ageDays > inv.term) ? inv.remaining : 0)
+  }, 0)
+  const maturitySamplesForScore: { days: number; expected: number }[] = []
+  for (const p of payments) {
+    if (p.maturityDate) {
+      const d = Math.round((+p.maturityDate - +p.paymentDate) / 86400000)
+      if (isFinite(d) && d > 0) maturitySamplesForScore.push({ days: d, expected: (p.expectedTerm != null ? p.expectedTerm : 30) })
+    }
+  }
+  const mostCommonTermForScore = maturitySamplesForScore.length ? mode(maturitySamplesForScore.map(m => m.expected), 30) : 30
+  const baseMultAvgBand = (mostCommonTermForScore === 90) ? 2.75 : 1.5
+  const creditLimitForScore: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMultAvgBand) : ''
+  const pctOverdueVsCreditLimitScore: number | '' = (creditLimitForScore !== '' && (creditLimitForScore as number) > 0)
+    ? (overdueOutstandingTermScore / (creditLimitForScore as number))
+    : ''
+  add(compLowerBetter(pctOverdueVsCreditLimitScore, 0, 0.10), 0.20)
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
@@ -524,13 +598,8 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
     ? (maturitySamples.filter(m => m.days > m.expected).length / maturitySamples.length)
     : ''
 
-  // All payment types: % of invoices delivered (closed) after their term using handover lag
-  const pctPaymentsDeliveredAfterTerm: number | '' = paid.length
-    ? (paid.filter(inv => {
-        const d2p = Math.round(((+inv.closingDate!) - (+inv.invoiceDate)) / 86400000)
-        return d2p > inv.term
-      }).length / paid.length)
-    : ''
+
+  // (moved earlier for scoring)
 
   // Metrics rows
   function assessLower(val: any, goodMax: number, avgMax: number) {
@@ -539,13 +608,13 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const metrics: { label: string; value: any; assess: string }[] = []
   const roundDays = (x: any) => (typeof x === 'number' ? Math.round(x) : x)
-  metrics.push({ label: 'Average Days to Pay (Paid Only)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
+  metrics.push({ label: 'Average Days to Pay (Handover)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
   metrics.push({ label: 'Weighted Avg Age of Unpaid Invoices (Days)', value: roundDays(avgAgeUnpaid), assess: assessLower(avgAgeUnpaid, 10, 20) })
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
-  metrics.push({ label: 'Average Check Maturity Duration (Days)', value: roundDays(avgCheckMaturityDuration), assess: '' })
-  metrics.push({ label: 'Avg Maturity Over By (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
-  metrics.push({ label: '% of Checks Over Term', value: pctChecksOverTerm, assess: assessLower(pctChecksOverTerm, 0.30, 0.60) })
-  metrics.push({ label: '% of Payments Delivered After Term', value: pctPaymentsDeliveredAfterTerm, assess: assessLower(pctPaymentsDeliveredAfterTerm, 0.30, 0.60) })
+  // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
+  metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
+  metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettleDisplay), assess: assessLower(avgDaysToSettleDisplay, 20, 40) })
+  metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.20, 0.40) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
   // New metric: overdue balance as a percentage of assigned credit limit (term-based overdue)
   const overdueOutstandingTerm = unpaid.reduce((s, inv) => {
@@ -555,7 +624,7 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const pctOverdueVsCreditLimit: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
     ? (overdueOutstandingTerm / (creditLimit as number))
     : ''
-  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0.30, 0.60) })
+  metrics.push({ label: 'Overdue Balance as % of Credit Limit', value: pctOverdueVsCreditLimit, assess: assessLower(pctOverdueVsCreditLimit, 0, 0.10) })
   // Include purchases and credit limit like original Apps Script
   metrics.push({ label: 'Average Monthly Purchases (TRY)', value: avgMonthlyPurchases, assess: '' })
   metrics.push({ label: 'Credit Limit (TRY)', value: creditLimit, assess: '' })

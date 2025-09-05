@@ -174,6 +174,8 @@ export function normalizePayType2(v: any): { type: string; termDays: number | nu
   if (!t) return { type: '', termDays: null }
   if (/(\bkk\b|k\.k\.|kredi\s*kart|credit\s*card|\bkart\b|pos)/.test(t)) return { type: 'Card', termDays: 30 }
   if (/(\bcek\b|cheque|\bcheck\b|\bsenet\b|\bvadeli\b)/.test(t)) return { type: 'Check', termDays: 90 }
+  // Bank transfers should settle same-day; classify as non-check so they don't get maturity logic
+  if (/(havale|eft|transfer|fast)/.test(t)) return { type: 'Cash', termDays: 30 }
   if (/(\bpesin\b|cash|nakit)/.test(t)) return { type: 'Cash', termDays: 30 }
   return { type: '', termDays: null }
 }
