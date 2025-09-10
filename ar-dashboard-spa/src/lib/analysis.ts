@@ -595,6 +595,31 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
   const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
+  // Debug: expose scoring breakdown for troubleshooting
+  try {
+    const provItems = [
+      { key: 'ADTP', val: avgPaymentLagDays, w: 0.20, comp: compLowerBetter(avgPaymentLagDays, 30, 45) },
+      { key: 'AgeUnpaid', val: avgAgeUnpaid, w: 0.20, comp: compLowerBetter(avgAgeUnpaid, 10, 20) },
+      { key: '%UnpaidOverdue', val: overdueRate, w: 0.20, comp: compLowerBetter(overdueRate, 0.10, 0.30) },
+      { key: 'CheckMaturityOver', val: avgCheckMaturityOverBy, w: 0.20, comp: compLowerBetter(avgCheckMaturityOverBy, 30, 45) },
+      { key: '%SettledAfterTerm', val: pctInvoicesSettledAfterTerm, w: 0.20, comp: compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40) },
+    ]
+    const finalItems = [
+      { key: 'ADTP', val: avgPaymentLagDays, w: 0.20, comp: compLowerBetter(avgPaymentLagDays, 30, 45) },
+      { key: 'AgeUnpaid', val: avgAgeUnpaid, w: 0.10, comp: compLowerBetter(avgAgeUnpaid, 10, 20) },
+      { key: '%UnpaidOverdue', val: overdueRate, w: 0.10, comp: compLowerBetter(overdueRate, 0.10, 0.30) },
+      { key: 'CheckMaturityOver', val: avgCheckMaturityOverBy, w: 0.20, comp: compLowerBetter(avgCheckMaturityOverBy, 30, 45) },
+      { key: '%SettledAfterTerm', val: pctInvoicesSettledAfterTerm, w: 0.20, comp: compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40) },
+      { key: 'Overdue%vsCL', val: pctOverdueVsCreditLimitFinal, w: 0.20, comp: compLowerBetter(pctOverdueVsCreditLimitFinal, 0, 0.10) },
+    ]
+    const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {})
+    dbg.scoreDebug = {
+      provisional: { items: provItems, score: provisionalScore, band: provisionalRiskBand },
+      final: { items: finalItems, score: normalizedScore, band: riskBand },
+      creditLimit,
+    }
+  } catch {}
+
   // Checks-only: % of checks where maturity duration exceeds expected term
   const pctChecksOverTerm: number | '' = maturitySamples.length
     ? (maturitySamples.filter(m => m.days > m.expected).length / maturitySamples.length)
