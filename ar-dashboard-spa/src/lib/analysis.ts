@@ -616,10 +616,12 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettleDisplay), assess: assessLower(avgDaysToSettleDisplay, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.20, 0.40) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
-  // New metric: overdue balance as a percentage of assigned credit limit (term-based overdue)
+  // New metric: overdue balance as a percentage of assigned credit limit (30-day basis)
+  // Business rule: balance is considered closed upon check handover, but
+  // still outstanding until collected; use invoiceDate + 30 days for overdue.
   const overdueOutstandingTerm = unpaid.reduce((s, inv) => {
     const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
-    return s + ((ageDays > inv.term) ? inv.remaining : 0)
+    return s + ((ageDays > 30) ? inv.remaining : 0)
   }, 0)
   const pctOverdueVsCreditLimit: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
     ? (overdueOutstandingTerm / (creditLimit as number))

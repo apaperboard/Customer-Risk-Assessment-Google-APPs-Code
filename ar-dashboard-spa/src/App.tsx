@@ -105,7 +105,7 @@ export default function App() {
       'Average Monthly Purchases (TRY)': 'Total invoiced in the period divided by months since start.',
       'Credit Limit (TRY)': 'Average monthly purchases × risk/term multiplier; rounded to nearest 10,000.',
       'Available Credit (TRY)': 'Credit limit minus current open AR balance; floored at zero.',
-      'Overdue Balance as % of Credit Limit': 'Unpaid balance past due (by term) divided by assigned credit limit.',
+    'Overdue Balance as % of Credit Limit': 'Unpaid balance past due by 30 days from invoice date divided by assigned credit limit.',
       'Customer Risk Rating': 'Composite rating (Good/Average/Poor) based on weighted metrics.'
     },
     tr: {
@@ -121,7 +121,7 @@ export default function App() {
       'Average Monthly Purchases (TRY)': 'Dönemde kesilen toplam fatura tutarı / başlangıçtan bu yana ay sayısı.',
       'Credit Limit (TRY)': 'Aylık ortalama alış × risk/vade katsayısı; 10.000’e yuvarlanır.',
       'Available Credit (TRY)': 'Kredi limiti − cari açık bakiye; sıfırın altına düşmez.',
-      'Overdue Balance as % of Credit Limit': 'Vadesi geçen ödenmemiş bakiye / atanmış kredi limiti.',
+      'Overdue Balance as % of Credit Limit': 'Fatura tarihinden itibaren 30 günü aşan vadesi geçmiş ödenmemiş bakiye / atanmış kredi limiti.',
       'Customer Risk Rating': 'Ağırlıklandırılmış metriklere dayalı birleşik not (İyi/Orta/Zayıf).'
     },
     ar: {
@@ -137,7 +137,7 @@ export default function App() {
       'Average Monthly Purchases (TRY)': 'إجمالي المبالغ المفوترة خلال الفترة ÷ عدد الأشهر منذ البداية.',
       'Credit Limit (TRY)': 'متوسط المشتريات الشهري × معامل حسب المخاطر/المدة؛ يُقرّب لأقرب 10,000.',
       'Available Credit (TRY)': 'حد الائتمان − الرصيد المفتوح الحالي؛ لا يقل عن صفر.',
-      'Overdue Balance as % of Credit Limit': 'الرصيد غير المسدد المتأخر (حسب المدة) ÷ حد الائتمان المخصص.',
+      'Overdue Balance as % of Credit Limit': 'الرصيد غير المسدد المتأخر بعد 30 يومًا من تاريخ الفاتورة ÷ حد الائتمان المخصص.',
       'Customer Risk Rating': 'تصنيف مركب (جيد/متوسط/ضعيف) مبني على مؤشرات موزونة.'
     }
   }
