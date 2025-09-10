@@ -608,11 +608,11 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const metrics: { label: string; value: any; assess: string }[] = []
   const roundDays = (x: any) => (typeof x === 'number' ? Math.round(x) : x)
-  metrics.push({ label: 'Average Days to Pay (Handover)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 20, 40) })
+  metrics.push({ label: 'Average Days to Pay (Handover)', value: roundDays(avgPaymentLagDays), assess: assessLower(avgPaymentLagDays, 30, 45) })
   metrics.push({ label: 'Weighted Avg Age of Unpaid Invoices (Days)', value: roundDays(avgAgeUnpaid), assess: assessLower(avgAgeUnpaid, 10, 20) })
   metrics.push({ label: '% of Unpaid Invoices Overdue', value: overdueRate, assess: assessLower(overdueRate, 0.10, 0.30) })
   // Recode Avg Check Maturity Over Expected (Days) to use settlement basis
-  metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 0, 30) })
+  metrics.push({ label: 'Avg Check Maturity Over Expected (Days)', value: roundDays(avgCheckMaturityOverBy), assess: assessLower(avgCheckMaturityOverBy, 30, 45) })
   metrics.push({ label: 'Average Days to Settle (Settlement)', value: roundDays(avgDaysToSettleDisplay), assess: assessLower(avgDaysToSettleDisplay, 20, 40) })
   metrics.push({ label: '% of Invoices Settled After Term (Settlement)', value: pctInvoicesSettledAfterTerm, assess: assessLower(pctInvoicesSettledAfterTerm, 0.20, 0.40) })
   metrics.push({ label: 'Customer Risk Rating', value: riskBand, assess: riskBand })
