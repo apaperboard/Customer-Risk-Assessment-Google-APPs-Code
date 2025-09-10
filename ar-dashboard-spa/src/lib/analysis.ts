@@ -576,13 +576,13 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
 
   // Final score (with Overdue Balance % of Credit Limit, using ASSIGNED creditLimit)
-  // Compute overdue balance past TERM (same logic as before)
-  const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
+  // Compute overdue balance past 30 days (aligned with overdue-rate metric and UI)
+  const overdueOutstanding30Score = unpaid.reduce((s, inv) => {
     const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
-    return s + ((ageDays > inv.term) ? inv.remaining : 0)
+    return s + ((ageDays > 30) ? inv.remaining : 0)
   }, 0)
   const pctOverdueVsCreditLimitFinal: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
-    ? (overdueOutstandingTermScore / (creditLimit as number))
+    ? (overdueOutstanding30Score / (creditLimit as number))
     : ''
   let weightedSum = 0, weightTotal = 0
   const add = (comp: number | null, w: number) => { if (comp == null) return; weightedSum += comp*w; weightTotal += w }
