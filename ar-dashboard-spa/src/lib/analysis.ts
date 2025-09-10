@@ -540,42 +540,24 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   const avgDaysToSettleDisplay: number | '' = majorityCardCash ? '' : avgDaysToSettle
   const avgCheckMaturityOverBy: number | '' = (!majorityCardCash && avgDaysToSettle !== '') ? ((avgDaysToSettle as number) - 90) : ''
 
-  // Score (weighted)
+  // Score helpers
   function compLowerBetter(val: any, goodMax: number, avgMax: number) {
     if (val === '') return null
     return (val <= goodMax) ? 1 : (val <= avgMax) ? 0.5 : 0
   }
-  let weightedSum = 0, weightTotal = 0
-  function add(comp: number | null, w: number) { if (comp == null) return; weightedSum += comp*w; weightTotal += w }
-  add(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
-  add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
-  add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
-  add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
-  // Settlement lateness share now included in scoring (not handover checks metric)
-  add(compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40), 0.20)
-  // Include Overdue Balance as % of Credit Limit in scoring (use neutral 'Average' band multiplier for provisional limit)
-  const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
-    const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
-    return s + ((ageDays > inv.term) ? inv.remaining : 0)
-  }, 0)
-  const maturitySamplesForScore: { days: number; expected: number }[] = []
-  for (const p of payments) {
-    if (p.maturityDate) {
-      const d = Math.round((+p.maturityDate - +p.paymentDate) / 86400000)
-      if (isFinite(d) && d > 0) maturitySamplesForScore.push({ days: d, expected: (p.expectedTerm != null ? p.expectedTerm : 30) })
-    }
-  }
-  const mostCommonTermForScore = maturitySamplesForScore.length ? mode(maturitySamplesForScore.map(m => m.expected), 30) : 30
-  const baseMultAvgBand = (mostCommonTermForScore === 90) ? 2.75 : 1.5
-  const creditLimitForScore: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMultAvgBand) : ''
-  const pctOverdueVsCreditLimitScore: number | '' = (creditLimitForScore !== '' && (creditLimitForScore as number) > 0)
-    ? (overdueOutstandingTermScore / (creditLimitForScore as number))
-    : ''
-  add(compLowerBetter(pctOverdueVsCreditLimitScore, 0, 0.10), 0.20)
-  const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
-  const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
+  // Provisional score (no credit-limit metric), equal weights per your rubric tweak
+  let provWeighted = 0, provTotal = 0
+  const addProv = (comp: number | null, w: number) => { if (comp == null) return; provWeighted += comp*w; provTotal += w }
+  // Provisional rubric: each at 0.20
+  addProv(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
+  addProv(compLowerBetter(avgAgeUnpaid, 10, 20), 0.20)
+  addProv(compLowerBetter(overdueRate, 0.10, 0.30), 0.20)
+  addProv(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
+  addProv(compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40), 0.20)
+  const provisionalScore = (provTotal > 0) ? (provWeighted / provTotal) : 0
+  const provisionalRiskBand = (provisionalScore <= 0.3333) ? 'Poor' : (provisionalScore <= 0.6667) ? 'Average' : 'Good'
 
-  // Estimate customer credit limit based on risk band and most common term
+  // Estimate customer credit limit based on PROVISIONAL risk band and most common term
   const maturitySamples: { days: number; expected: number }[] = []
   for (const p of payments) {
     if (p.maturityDate) {
@@ -585,13 +567,33 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   }
   const mostCommonTerm = maturitySamples.length ? mode(maturitySamples.map(m => m.expected), 30) : 30
   const baseMult = (mostCommonTerm === 90)
-    ? (riskBand === 'Good' ? 3.0 : (riskBand === 'Average' ? 2.75 : 2.5))
-    : (riskBand === 'Good' ? 2.0 : (riskBand === 'Average' ? 1.5 : 1.0))
+    ? (provisionalRiskBand === 'Good' ? 3.0 : (provisionalRiskBand === 'Average' ? 2.75 : 2.5))
+    : (provisionalRiskBand === 'Good' ? 2.0 : (provisionalRiskBand === 'Average' ? 1.5 : 1.0))
   let creditLimit: number | '' = (avgMonthlyPurchases !== '') ? ((avgMonthlyPurchases as number) * baseMult) : ''
   if (creditLimit !== '' && isFinite(creditLimit as number)) {
     // Round up to nearest 10,000
     creditLimit = Math.ceil((creditLimit as number) / 10000) * 10000
   }
+
+  // Final score (with Overdue Balance % of Credit Limit, using ASSIGNED creditLimit)
+  // Compute overdue balance past TERM (same logic as before)
+  const overdueOutstandingTermScore = unpaid.reduce((s, inv) => {
+    const ageDays = Math.floor(((+today - +inv.invoiceDate) / 86400000))
+    return s + ((ageDays > inv.term) ? inv.remaining : 0)
+  }, 0)
+  const pctOverdueVsCreditLimitFinal: number | '' = (creditLimit !== '' && (creditLimit as number) > 0)
+    ? (overdueOutstandingTermScore / (creditLimit as number))
+    : ''
+  let weightedSum = 0, weightTotal = 0
+  const add = (comp: number | null, w: number) => { if (comp == null) return; weightedSum += comp*w; weightTotal += w }
+  add(compLowerBetter(avgPaymentLagDays, 30, 45), 0.20)
+  add(compLowerBetter(avgAgeUnpaid, 10, 20), 0.10)
+  add(compLowerBetter(overdueRate, 0.10, 0.30), 0.10)
+  add(compLowerBetter(avgCheckMaturityOverBy, 30, 45), 0.20)
+  add(compLowerBetter(pctInvoicesSettledAfterTerm, 0.20, 0.40), 0.20)
+  add(compLowerBetter(pctOverdueVsCreditLimitFinal, 0, 0.10), 0.20)
+  const normalizedScore = (weightTotal > 0) ? (weightedSum / weightTotal) : 0
+  const riskBand = (normalizedScore <= 0.3333) ? 'Poor' : (normalizedScore <= 0.6667) ? 'Average' : 'Good'
 
   // Checks-only: % of checks where maturity duration exceeds expected term
   const pctChecksOverTerm: number | '' = maturitySamples.length
