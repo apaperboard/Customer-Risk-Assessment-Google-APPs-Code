@@ -340,6 +340,8 @@ export function parseRowsToModel(rows: RowObject[]): ParsedInput {
 }
 
 export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate: Date, beginningBalance: number) {
+  // Treat tiny residual balances as settled to avoid skewing open-invoice metrics
+  const SMALL_BALANCE_TOLERANCE = 1000 // currency units (e.g., TRY)
   const invoices = invoicesIn.map(x => ({...x}))
   const payments = paymentsIn.map(x => ({...x}))
   const today = new Date()
@@ -434,6 +436,23 @@ export function analyze(invoicesIn: Invoice[], paymentsIn: Payment[], startDate:
   for (const inv of invoices) {
     if (inv._synthetic) continue
     if (inv._appliedTerms && inv._appliedTerms.length) inv.term = mode(inv._appliedTerms, inv.term)
+  }
+  
+  // Close out invoices with only a tiny leftover balance
+  for (const inv of invoices) {
+    if (inv._synthetic) continue
+    if (isFinite(inv.remaining) && inv.remaining > 0 && inv.remaining < SMALL_BALANCE_TOLERANCE) {
+      inv.remaining = 0
+      inv.paid = true
+      if (!inv.closingDate) {
+        // choose the latest applied payment date if available; otherwise use today
+        let latestPay: Date | null = null
+        if (inv._appliedPays && inv._appliedPays.length) {
+          for (const ap of inv._appliedPays) { if (!latestPay || +ap.paymentDate > +latestPay) latestPay = ap.paymentDate }
+        }
+        inv.closingDate = latestPay || today
+      }
+    }
   }
   try {
     const invTermCounts: Record<string, number> = {}
