@@ -176,7 +176,7 @@ export default function App() {
         console.debug('[upload] customer (B1):', key)
       }
     } catch {}
-    console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
+    setLoadedResult(null); console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
     const { rows, autoBeginBalance } = extractTable(ws)
     console.debug('[upload] rows parsed:', rows.length, 'autoBeginBalance:', autoBeginBalance)
     setUpload({ filename: f.name, rows })
@@ -193,32 +193,7 @@ export default function App() {
     }
   }
 
-  const result = useMemo(() => {
-    if (!upload) return null
-    const model = parseRowsToModel(upload.rows)
-    // Parse beginning balance robustly (supports commas and different locales)
-    const bb = (() => {
-      const s = String(beginBal ?? '').trim()
-      const onlyDigits = s.replace(/[^0-9,\.-]/g, '')
-      // prefer comma as thousands; if both present, assume last separator is decimal
-      let n: number
-      if (onlyDigits.includes(',') && onlyDigits.includes('.')) {
-        const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')
-        const norm = (lc > ld) ? onlyDigits.replace(/\./g, '').replace(',', '.') : onlyDigits.replace(/,/g, '')
-        n = Number(norm)
-      } else if (onlyDigits.includes(',')) {
-        const parts = onlyDigits.split(',');
-        const norm = (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) ? (parts[0].replace(/,/g,'') + '.' + parts[1]) : onlyDigits.replace(/,/g,'')
-        n = Number(norm)
-      } else {
-        n = Number(onlyDigits)
-      }
-      return isFinite(n) ? n : 0
-    })()
-    const start = model.firstTransactionDate || model.firstInvoiceDate
-    if (!start) return { error: 'No dated rows found.' }
-    return analyze(model.invoices, model.payments, start, bb)
-  }, [upload, beginBal])
+  const [loadedResult, setLoadedResult] = useState<any | null>(null)\n  const computedResult = useMemo(() => {\n    if (!upload) return null\n    const model = parseRowsToModel(upload.rows)\n    const bb = (() => {\n      const s = String(beginBal ?? '').trim()\n      const onlyDigits = s.replace(/[^0-9,\\.-]/g, '')\n      let n: number\n      if (onlyDigits.includes(',') && onlyDigits.includes('.')) {\n        const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')\n        const norm = (lc > ld) ? onlyDigits.replace(/\\./g, '').replace(',', '.') : onlyDigits.replace(/,/g, '')\n        n = Number(norm)\n      } else if (onlyDigits.includes(',')) {\n        const parts = onlyDigits.split(',');\n        const norm = (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) ? (parts[0].replace(/,/g,'') + '.' + parts[1]) : onlyDigits.replace(/,/g,'')\n        n = Number(norm)\n      } else {\n        n = Number(onlyDigits)\n      }\n      return isFinite(n) ? n : 0\n    })()\n    const start = model.firstTransactionDate || model.firstInvoiceDate\n    if (!start) return { error: 'No dated rows found.' }\n    return analyze(model.invoices, model.payments, start, bb)\n  }, [upload, beginBal])\n  const result: any = loadedResult || computedResult
 
   useEffect(() => {
     if (!result) return
@@ -244,7 +219,25 @@ export default function App() {
     } catch {}
   }, [fbEnabled])
 
-  async function loadLatest() {
+    function reviveReport(rep: any): any {
+    try {
+      const out: any = { ...rep }
+      if (out.startDate) { const d = new Date(out.startDate); if (!isNaN(+d)) out.startDate = d }
+      if (Array.isArray(out.invoices)) {
+        out.invoices = out.invoices.map((inv: any) => {
+          const ii = { ...inv }
+          if (ii.invoiceDate) { const d = new Date(ii.invoiceDate); if (!isNaN(+d)) ii.invoiceDate = d }
+          if (ii.closingDate) { const d = new Date(ii.closingDate); if (!isNaN(+d)) ii.closingDate = d }
+          return ii
+        })
+      }
+      if (Array.isArray(out.months)) {
+        out.months = out.months.map((m: any) => ({ ...m, dt: new Date(m.dt) }))
+      }
+      return out
+    } catch { return rep }
+  }
+async function loadLatest() {
     if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     try {
       if (fbEnabled && isFirebaseReady()) {
@@ -677,3 +670,7 @@ function DebugPanel() {
     </div>
   )
 }
+
+
+
+
