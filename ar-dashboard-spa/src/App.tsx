@@ -109,7 +109,13 @@ export default function App() {
     tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
     ar: { title: 'لوحة تحليل الذمم (على المتصفح)', instructions: 'أسقط ملف Excel/CSV من نظام ERP أو اختر ملفاً. تبقى البيانات في المتصفح.', uploadFile: 'رفع ملف', noFile: 'لم يتم اختيار ملف', beginBal: 'الرصيد الافتتاحي (ليرة)', exportExcel: 'تصدير إلى Excel', showDebug: 'إظهار التصحيح', hideDebug: 'إخفاء التصحيح', metrics: 'المؤشرات', metric: 'المؤشر', value: 'القيمة', assessment: 'التقييم', aging: 'أعمار الديون', bucket: 'الفئة', outstanding: 'الرصيد (ليرة)', analysisTable: 'جدول التحليل', invoiceDate: 'تاريخ الفاتورة', invoiceNo: 'رقم الفاتورة', type: 'النوع', amount: 'المبلغ', closingDate: 'تاريخ الإقفال', termDays: 'المدة (أيام)', dueDate: 'تاريخ الاستحقاق', daysToPay: 'أيام السداد', daysAfterDue: 'أيام بعد الاستحقاق', remaining: 'المتبقي', arBalance: 'رصيد الذمم', ledger: 'دفتر القيود', date: 'التاريخ', description: 'الوصف', ref: 'المرجع', debit: 'مدين', credit: 'دائن', running: 'الرصيد المتراكم', language: 'اللغة' }
   }
-  const t = (k: string) => i18n[lang][k] || k
+  // Supplemental UI labels not present in the original map
+  const i18nExtra: Record<'en'|'tr'|'ar', Record<string,string>> = {
+    en: { loadLatest: 'Load Latest', saveLatest: 'Save Latest', deleteSaved: 'Delete Saved Report', deleteAllData: 'Delete All Data', refresh: 'Refresh', signInGoogle: 'Sign in with Google', signOut: 'Sign out', customerB1: 'Customer (B1)', orPickSaved: 'Or pick saved:' },
+    tr: { loadLatest: 'Son Kaydı Yükle', saveLatest: 'Son Kaydı Kaydet', deleteSaved: 'Kaydı Sil', deleteAllData: 'Tüm Verileri Sil', refresh: 'Yenile', signInGoogle: 'Google ile giriş', signOut: 'Çıkış', customerB1: 'Müşteri (B1)', orPickSaved: 'Veya kayıtlı seç:' },
+    ar: { loadLatest: 'تحميل آخر تقرير', saveLatest: 'حفظ آخر تقرير', deleteSaved: 'حذف التقرير المحفوظ', deleteAllData: 'حذف كل البيانات', refresh: 'تحديث', signInGoogle: 'تسجيل الدخول بواسطة Google', signOut: 'تسجيل خروج', customerB1: 'العميل (B1)', orPickSaved: 'أو اختر محفوظاً:' }
+  }
+  const t = (k: string) => (i18n[lang] && k in i18n[lang] ? i18n[lang][k] : (i18nExtra[lang] && i18nExtra[lang][k]) || k)
   const locale = lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : 'en-US'
 
   // Metric name translations (by original analysis label)
@@ -440,24 +446,24 @@ async function loadLatest() {
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         {fbEnabled && (
           userEmail
-          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`Sign out (${userEmail})`}</button>
-          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{'Sign in with Google'}</button>
+          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`${t('signOut')} (${userEmail})`}</button>
+          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{t('signInGoogle')}</button>
         )}
-        <div style={{ opacity: 0.8 }}>Customer (B1): <b>{customerKey || '(not detected yet)'}</b></div>
+        <div style={{ opacity: 0.8 }}>{t('customerB1')}: <b>{customerKey || '(not detected yet)'}</b></div>
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-          <label style={{ opacity:0.8 }}>Or pick saved:</label>
+          <label style={{ opacity:0.8 }}>{t('orPickSaved')}</label>
           <select value={customerKey} onChange={e=>setCustomerKey(e.target.value)} style={{ padding:6, borderRadius:6 }}>
             <option value="">-- Select customer --</option>
             {customerList.map(k => (
               <option key={k} value={k}>{k}</option>
             ))}
           </select>
-          <button onClick={refreshCustomerList} title="Refresh customer list">Refresh</button>
+          <button onClick={refreshCustomerList} title="Refresh customer list">{t('refresh')}</button>
         </div>
-        <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
-        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
-        <button onClick={deleteSavedForCurrent} title="Delete saved report for this customer">Delete Saved Report</button>
-        <button onClick={deleteAllData} title="Delete all saved reports on this device">Delete All Data</button>
+        <button onClick={loadLatest}>{t('loadLatest')}</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{t('saveLatest')}</button>
+        <button onClick={deleteSavedForCurrent} title="Delete saved report for this customer">{t('deleteSaved')}</button>
+        <button onClick={deleteAllData} title="Delete all saved reports on this device">{t('deleteAllData')}</button>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
