@@ -23,15 +23,15 @@ jobs:
         with:
           node-version: 20
       - name: Install deps
-        working-directory: Customer-Risk-Assessment-Google-APPs-Code/ar-dashboard-spa
+        working-directory: ar-dashboard-spa
         run: npm install --no-audit --no-fund
       - name: Build
-        working-directory: Customer-Risk-Assessment-Google-APPs-Code/ar-dashboard-spa
+        working-directory: ar-dashboard-spa
         run: npm run build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: Customer-Risk-Assessment-Google-APPs-Code/ar-dashboard-spa/dist
+          path: ar-dashboard-spa/dist
 
   deploy:
     needs: build
@@ -52,4 +52,3 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             Preview is ready: ${{ steps.deployment.outputs.page_url }}
-
