@@ -775,4 +775,170 @@ function showInputDebug() {
 }
 
 
+/**
+ * --- Secure Latest Report API (GIS token + ACL + Drive JSON) ---
+ * - Stores and retrieves the latest per-customer report JSON.
+ * - Customer key: defaults to the name in cell B1 of the Input sheet.
+ * - Auth: Google Identity Services ID token verification.
+ * - Access control: AccessControl sheet with Email | Role | AllowedCustomers
+ */
+
+var INDEX_SHEET = 'LatestReportsIndex';
+var ACCESS_SHEET = 'AccessControl';
+var OAUTH_CLIENT_IDS = ['YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'];
+
+function normalizeKey_(name) {
+  return String(name || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
+function ensureIndexSheet_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(INDEX_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(INDEX_SHEET);
+    sh.appendRow(['Key', 'FileId', 'UpdatedAt']);
+  }
+  return sh;
+}
+
+function findRowByKey_(sh, key) {
+  var values = sh.getDataRange().getValues();
+  for (var i = 1; i < values.length; i++) {
+    if (values[i][0] === key) return { index: i + 1, row: values[i] };
+  }
+  return null;
+}
+
+function saveLatestReportForCustomer_(customerKey, reportObj) {
+  var key = normalizeKey_(customerKey);
+  var sh = ensureIndexSheet_();
+  var hit = findRowByKey_(sh, key);
+  var content = JSON.stringify(reportObj);
+  if (hit) {
+    var fileId = hit.row[1];
+    DriveApp.getFileById(fileId).setContent(content);
+    sh.getRange(hit.index, 3).setValue(new Date());
+    return fileId;
+  } else {
+    var file = DriveApp.createFile('CreditReport - ' + key + '.json', content, MimeType.PLAIN_TEXT);
+    var fileId2 = file.getId();
+    sh.appendRow([key, fileId2, new Date()]);
+    return fileId2;
+  }
+}
+
+function getLatestReportForCustomer_(customerKey) {
+  var key = normalizeKey_(customerKey);
+  var sh = ensureIndexSheet_();
+  var hit = findRowByKey_(sh, key);
+  if (!hit) return null;
+  var fileId = hit.row[1];
+  var text = DriveApp.getFileById(fileId).getBlob().getDataAsString();
+  try { return JSON.parse(text); } catch (e) { return text; }
+}
+
+function ensureAccessSheet_() {
+  var ss = SpreadsheetApp.getActive();
+  var sh = ss.getSheetByName(ACCESS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(ACCESS_SHEET);
+    sh.appendRow(['Email','Role','AllowedCustomers']);
+  }
+  return sh;
+}
+
+function getUserAccess_(email) {
+  var sh = ensureAccessSheet_();
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] || '').toLowerCase() === String(email || '').toLowerCase()) {
+      var role = String(rows[i][1] || '').toLowerCase();
+      var allowed = String(rows[i][2] || '').trim();
+      return { role: role, allowed: allowed };
+    }
+  }
+  return { role: '', allowed: '' };
+}
+
+function isAllowedCustomer_(allowed, key) {
+  if (!allowed) return false;
+  if (allowed === '*') return true;
+  var list = allowed.split(',').map(function(s){ return normalizeKey_(s); }).filter(function(s){ return !!s; });
+  return list.indexOf(normalizeKey_(key)) > -1;
+}
+
+function assertAuthorized_(email, action, customerKey) {
+  var acl = getUserAccess_(email);
+  var canView = acl.role === 'viewer' || acl.role === 'editor' || acl.role === 'admin';
+  var canEdit = acl.role === 'editor' || acl.role === 'admin';
+  if (action === 'view' && !canView) throw new Error('Not authorized');
+  if (action === 'save' && !canEdit) throw new Error('Not authorized');
+  if (acl.role !== 'admin' && !isAllowedCustomer_(acl.allowed, customerKey)) throw new Error('Customer scope denied');
+}
+
+function verifyGoogleIdToken_(idToken) {
+  if (!idToken) throw new Error('Missing id_token');
+  var url = 'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken);
+  var res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('Invalid token');
+  var info = JSON.parse(res.getContentText());
+  var audOk = OAUTH_CLIENT_IDS.indexOf(info.aud) > -1;
+  var issOk = (info.iss === 'accounts.google.com' || info.iss === 'https://accounts.google.com');
+  var expOk = Number(info.exp || 0) > Math.floor(Date.now()/1000);
+  var email = info.email || '';
+  var emailVerified = String(info.email_verified || '') === 'true';
+  if (!audOk || !issOk || !expOk || !email || !emailVerified) throw new Error('Token verification failed');
+  return { email: String(email).toLowerCase(), sub: info.sub, hd: info.hd || '' };
+}
+
+function extractAuth_(e) {
+  var idToken = (e && e.parameter && e.parameter.id_token) || '';
+  if (!idToken && e && e.postData && e.postData.contents) {
+    try { idToken = JSON.parse(e.postData.contents).id_token || ''; } catch (err) {}
+  }
+  return verifyGoogleIdToken_(idToken);
+}
+
+function getCustomerKeyFromSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('Input') || ss.getSheetByName('input') || ss.getSheetByName('BS Input') || ss.getSheetByName('BS input') || ss.getSheetByName('BSInput') || ss.getSheetByName('Bs Input') || ss.getSheetByName('Universal') || ss.getActiveSheet();
+  var v = String(sh.getRange('B1').getValue() || '').trim();
+  return v || '';
+}
+
+function doGet(e) {
+  try {
+    var who = extractAuth_(e);
+    var customer = String((e && e.parameter && e.parameter.customer) || '').trim();
+    if (!customer) customer = getCustomerKeyFromSheet_();
+    if (!customer) throw new Error('Missing customer');
+    assertAuthorized_(who.email, 'view', customer);
+    var report = getLatestReportForCustomer_(customer);
+    var body = JSON.stringify({ ok: !!report, report: report || null });
+    return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    var bodyErr = JSON.stringify({ ok: false, error: String(err && err.message || err) });
+    return ContentService.createTextOutput(bodyErr).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    var who = extractAuth_(e);
+    var body = (e && e.postData && e.postData.contents) ? JSON.parse(e.postData.contents) : {};
+    var customer = String(body.customer || '').trim();
+    if (!customer) customer = getCustomerKeyFromSheet_();
+    var report = body.report;
+    if (!customer || report == null) throw new Error('Missing customer or report');
+    assertAuthorized_(who.email, 'save', customer);
+    if (JSON.stringify(report).length > 5000000) throw new Error('Report too large');
+    saveLatestReportForCustomer_(customer, report);
+    var out = JSON.stringify({ ok: true });
+    return ContentService.createTextOutput(out).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    var bodyErr = JSON.stringify({ ok: false, error: String(err && err.message || err) });
+    return ContentService.createTextOutput(bodyErr).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 

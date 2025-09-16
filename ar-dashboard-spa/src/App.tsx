@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
@@ -15,6 +15,13 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState<boolean>(false)
   const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
+  // GIS + Latest report integration
+  const [idToken, setIdToken] = useState<string | null>(null)
+  const [customerKey, setCustomerKey] = useState<string>('')
+  const gisButtonRef = useRef<HTMLDivElement | null>(null)
+  // Override at runtime via window.__AR_WEB_APP_URL / __AR_GIS_CLIENT_ID
+  const WEB_APP_URL = (window as any).__AR_WEB_APP_URL || 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec'
+  const GIS_CLIENT_ID = (window as any).__AR_GIS_CLIENT_ID || 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'
   const i18n: Record<'en'|'tr'|'ar', Record<string,string>> = {
     en: { title: 'AR Analysis Dashboard (Client-side)', instructions: 'Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.', uploadFile: 'Upload File', noFile: 'No file selected', beginBal: 'Beginning Balance (TRY)', exportExcel: 'Export Excel', showDebug: 'Show Debug', hideDebug: 'Hide Debug', metrics: 'Metrics', metric: 'Metric', value: 'Value', assessment: 'Assessment', aging: 'Aging Buckets', bucket: 'Bucket', outstanding: 'Outstanding (TRY)', analysisTable: 'Analysis Table', invoiceDate: 'Invoice Date', invoiceNo: 'Invoice No', type: 'Type', amount: 'Amount', closingDate: 'Closing Date', termDays: 'Term (Days)', dueDate: 'Due Date', daysToPay: 'Days to Pay', daysAfterDue: 'Days After Due', remaining: 'Remaining', arBalance: 'AR Balance', ledger: 'Ledger', date: 'Date', description: 'Description', ref: 'Ref', debit: 'Debit', credit: 'Credit', running: 'Running Balance', language: 'Language' },
     tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
@@ -159,6 +166,68 @@ export default function App() {
     }
   }, [result])
 
+  // Initialize Google Identity Services sign-in button
+  useEffect(() => {
+    const w = window as any
+    if (!GIS_CLIENT_ID || GIS_CLIENT_ID.startsWith('YOUR_WEB_CLIENT_ID')) return
+    if (!w.google || !w.google.accounts || !w.google.accounts.id) return
+    try {
+      w.google.accounts.id.initialize({
+        client_id: GIS_CLIENT_ID,
+        callback: (resp: any) => {
+          if (resp && resp.credential) {
+            setIdToken(resp.credential)
+            setToast('Signed in')
+            setTimeout(() => setToast(null), 1200)
+          }
+        },
+        auto_select: false,
+      })
+      if (gisButtonRef.current) {
+        w.google.accounts.id.renderButton(gisButtonRef.current, { theme: 'outline', size: 'large' })
+      }
+    } catch (e) {
+      console.warn('GIS init failed:', e)
+    }
+  }, [GIS_CLIENT_ID])
+
+  async function loadLatest() {
+    if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
+    if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      const url = `${WEB_APP_URL}?customer=${encodeURIComponent(customerKey)}&id_token=${encodeURIComponent(idToken)}`
+      const res = await fetch(url, { cache: 'no-store' })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Load failed')
+      console.log('[loadLatest] report:', data.report)
+      setToast('Loaded latest report (see console)')
+      setTimeout(()=>setToast(null), 1400)
+    } catch (e:any) {
+      setToast('Load error: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
+  async function saveLatest() {
+    if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
+    if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
+    if (!result || 'error' in result) { setToast('No analysis to save'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        // No headers => browser uses text/plain; avoids CORS preflight
+        body: JSON.stringify({ id_token: idToken, customer: customerKey, report: result })
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'Save failed')
+      setToast('Saved latest report')
+      setTimeout(()=>setToast(null), 1200)
+    } catch (e:any) {
+      setToast('Save error: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
   const exportToExcel = () => {
     if (!result || 'error' in result) return
     const wb = XLSX.utils.book_new()
@@ -216,6 +285,17 @@ export default function App() {
         </div>
       </div>
       <p>{t('instructions')}</p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <div ref={gisButtonRef} />
+        <input
+          placeholder="Customer name (B1)"
+          value={customerKey}
+          onChange={e => setCustomerKey(e.target.value)}
+          style={{ padding: 8, minWidth: 260 }}
+        />
+        <button onClick={loadLatest}>Load Latest</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>Save Latest</button>
+      </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
           <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => {
