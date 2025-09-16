@@ -320,7 +320,7 @@ async function loadLatest() {
     if (!result || 'error' in result) return
     const wb = XLSX.utils.book_new()
 
-    const metricsRows = result.metrics.map(m => ({ Metric: m.label, Value: m.value, Assessment: m.assess }))
+    const metricsRows = result.metrics.map((m: any) => ({ Metric: m.label, Value: m.value, Assessment: m.assess }))
     const wsMetrics = XLSX.utils.json_to_sheet(metricsRows)
     XLSX.utils.book_append_sheet(wb, wsMetrics, 'Metrics')
 
@@ -329,7 +329,7 @@ async function loadLatest() {
     const wsAging = XLSX.utils.json_to_sheet(agingRows)
     XLSX.utils.book_append_sheet(wb, wsAging, 'Aging')
 
-    const analysisRows = result.invoices.map(inv => {
+    const analysisRows = result.invoices.map((inv: any) => {
       const closing = inv.paid && inv.closingDate ? inv.closingDate : null
       const daysToPay = closing ? Math.round(((+closing) - (+inv.invoiceDate))/86400000) : ''
       const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
@@ -351,7 +351,7 @@ async function loadLatest() {
     const wsAnalysis = XLSX.utils.json_to_sheet(analysisRows)
     XLSX.utils.book_append_sheet(wb, wsAnalysis, 'Analysis')
 
-    const trendRows = result.months.map(m => ({ Month: new Date(m.dt).toLocaleDateString(), 'Avg Days to Pay': m.avg }))
+    const trendRows = result.months.map((m: any) => ({ Month: new Date(m.dt).toLocaleDateString(), 'Avg Days to Pay': m.avg }))
     const wsTrend = XLSX.utils.json_to_sheet(trendRows)
     XLSX.utils.book_append_sheet(wb, wsTrend, 'Trend')
 
@@ -443,8 +443,8 @@ async function loadLatest() {
               <tbody>
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
-                  const metricsMain = result.metrics.filter(m => !specialLabels.has(m.label))
-                  return metricsMain.map((m, i) => {
+                  const metricsMain = result.metrics.filter((m: any) => !specialLabels.has(m.label))
+                  return metricsMain.map((m: any, i: number) => {
                     const isPct = m.label.includes('%')
                     const fmt = (v: any) => {
                       if (v === '') return ''
@@ -481,11 +481,11 @@ async function loadLatest() {
               <tbody>
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
-                  const items = result.metrics.filter(m => specialLabels.has(m.label))
-                  const cl = items.find(it => it.label === 'Credit Limit (TRY)')?.value
+                  const items = result.metrics.filter((m: any) => specialLabels.has(m.label))
+                  const cl = items.find((it: any) => it.label === 'Credit Limit (TRY)')?.value
                   const openBal = result.invoices.length ? (result.invoices[result.invoices.length - 1].running ?? 0) : 0
                   const available: any = (typeof cl === 'number') ? Math.max(0, cl - openBal) : ''
-                  const rows = items.map((m, i) => {
+                  const rows = items.map((m: any, i: number) => {
                     const isPct = m.label.includes('%')
                     const fmt = (v: any) => {
                       if (v === '') return ''
@@ -552,7 +552,7 @@ async function loadLatest() {
                 </tr>
               </thead>
               <tbody>
-                {result.invoices.map((inv, i) => {
+                {result.invoices.map((inv: any, i: number) => {
                   const daysToPay = (inv.paid && inv.closingDate) ? Math.round(((+inv.closingDate) - (+inv.invoiceDate))/86400000) : ''
                   const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
                   const daysAfterDue = (typeof daysToPay === 'number') ? (daysToPay - inv.term) : ''
