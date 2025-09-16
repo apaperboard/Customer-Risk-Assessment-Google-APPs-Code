@@ -19,9 +19,47 @@ export default function App() {
   const [idToken, setIdToken] = useState<string | null>(null)
   const [customerKey, setCustomerKey] = useState<string>('')
   const gisButtonRef = useRef<HTMLDivElement | null>(null)
-  // Override at runtime via window.__AR_WEB_APP_URL / __AR_GIS_CLIENT_ID
-  const WEB_APP_URL = (window as any).__AR_WEB_APP_URL || 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec'
-  const GIS_CLIENT_ID = (window as any).__AR_GIS_CLIENT_ID || 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com'
+  // Optional backend (not required). If not set, we store locally in the browser.
+  const WEB_APP_URL = (window as any).__AR_WEB_APP_URL || ''
+  const GIS_CLIENT_ID = (window as any).__AR_GIS_CLIENT_ID || ''
+
+  // ---- Local (browser) storage via IndexedDB ----
+  function idbOpen(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = window.indexedDB.open('ar-dashboard-db', 1)
+      req.onupgradeneeded = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains('latestReports')) {
+          db.createObjectStore('latestReports')
+        }
+      }
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+  }
+  async function idbSet(key: string, value: any) {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.put(value, key)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+  }
+  async function idbGet<T = any>(key: string): Promise<T | null> {
+    const db = await idbOpen()
+    const val = await new Promise<T | null>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readonly')
+      const store = tx.objectStore('latestReports')
+      const req = store.get(key)
+      req.onsuccess = () => resolve(req.result ?? null)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    return val
+  }
   const i18n: Record<'en'|'tr'|'ar', Record<string,string>> = {
     en: { title: 'AR Analysis Dashboard (Client-side)', instructions: 'Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.', uploadFile: 'Upload File', noFile: 'No file selected', beginBal: 'Beginning Balance (TRY)', exportExcel: 'Export Excel', showDebug: 'Show Debug', hideDebug: 'Hide Debug', metrics: 'Metrics', metric: 'Metric', value: 'Value', assessment: 'Assessment', aging: 'Aging Buckets', bucket: 'Bucket', outstanding: 'Outstanding (TRY)', analysisTable: 'Analysis Table', invoiceDate: 'Invoice Date', invoiceNo: 'Invoice No', type: 'Type', amount: 'Amount', closingDate: 'Closing Date', termDays: 'Term (Days)', dueDate: 'Due Date', daysToPay: 'Days to Pay', daysAfterDue: 'Days After Due', remaining: 'Remaining', arBalance: 'AR Balance', ledger: 'Ledger', date: 'Date', description: 'Description', ref: 'Ref', debit: 'Debit', credit: 'Credit', running: 'Running Balance', language: 'Language' },
     tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
@@ -166,10 +204,10 @@ export default function App() {
     }
   }, [result])
 
-  // Initialize Google Identity Services sign-in button
+  // Initialize Google Identity Services sign-in button (optional; only if a backend is used)
   useEffect(() => {
     const w = window as any
-    if (!GIS_CLIENT_ID || GIS_CLIENT_ID.startsWith('YOUR_WEB_CLIENT_ID')) return
+    if (!GIS_CLIENT_ID) return
     if (!w.google || !w.google.accounts || !w.google.accounts.id) return
     try {
       w.google.accounts.id.initialize({
@@ -193,13 +231,19 @@ export default function App() {
 
   async function loadLatest() {
     if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
-    if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      const url = `${WEB_APP_URL}?customer=${encodeURIComponent(customerKey)}&id_token=${encodeURIComponent(idToken)}`
-      const res = await fetch(url, { cache: 'no-store' })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || 'Load failed')
-      console.log('[loadLatest] report:', data.report)
+      if (WEB_APP_URL) {
+        if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
+        const url = `${WEB_APP_URL}?customer=${encodeURIComponent(customerKey)}&id_token=${encodeURIComponent(idToken)}`
+        const res = await fetch(url, { cache: 'no-store' })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Load failed')
+        console.log('[loadLatest] report (server):', data.report)
+      } else {
+        const local = await idbGet<any>(customerKey.toUpperCase().trim())
+        if (!local) throw new Error('No local saved report for this customer')
+        console.log('[loadLatest] report (local):', local)
+      }
       setToast('Loaded latest report (see console)')
       setTimeout(()=>setToast(null), 1400)
     } catch (e:any) {
@@ -210,16 +254,19 @@ export default function App() {
 
   async function saveLatest() {
     if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
-    if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
     if (!result || 'error' in result) { setToast('No analysis to save'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      const res = await fetch(WEB_APP_URL, {
-        method: 'POST',
-        // No headers => browser uses text/plain; avoids CORS preflight
-        body: JSON.stringify({ id_token: idToken, customer: customerKey, report: result })
-      })
-      const data = await res.json()
-      if (!data.ok) throw new Error(data.error || 'Save failed')
+      if (WEB_APP_URL) {
+        if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
+        const res = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          body: JSON.stringify({ id_token: idToken, customer: customerKey, report: result })
+        })
+        const data = await res.json()
+        if (!data.ok) throw new Error(data.error || 'Save failed')
+      } else {
+        await idbSet(customerKey.toUpperCase().trim(), result)
+      }
       setToast('Saved latest report')
       setTimeout(()=>setToast(null), 1200)
     } catch (e:any) {
@@ -286,15 +333,15 @@ export default function App() {
       </div>
       <p>{t('instructions')}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        <div ref={gisButtonRef} />
+        {!!WEB_APP_URL && <div ref={gisButtonRef} />}
         <input
           placeholder="Customer name (B1)"
           value={customerKey}
           onChange={e => setCustomerKey(e.target.value)}
           style={{ padding: 8, minWidth: 260 }}
         />
-        <button onClick={loadLatest}>Load Latest</button>
-        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>Save Latest</button>
+        <button onClick={loadLatest}>{WEB_APP_URL ? 'Load Latest (Server)' : 'Load Latest (This Browser)'}</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{WEB_APP_URL ? 'Save Latest (Server)' : 'Save Latest (This Browser)'}</button>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
