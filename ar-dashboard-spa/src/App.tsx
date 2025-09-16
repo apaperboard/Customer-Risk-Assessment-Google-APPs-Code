@@ -389,11 +389,37 @@ async function loadLatest() {
     XLSX.writeFile(wb, `${base}-ar-analysis.xlsx`)
   }
 
-  // Clear in-memory loaded report so the UI reverts to computed-from-upload
-  function clearLoaded() {
-    setLoadedResult(null)
-    setToast('Cleared loaded report from memory')
-    setTimeout(()=>setToast(null), 1200)
+  // Delete saved report for current customer (IndexedDB) and clear loaded state
+  async function deleteSavedForCurrent() {
+    const key = customerKey?.toUpperCase().trim()
+    if (!key) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      await idbDelete(key)
+      setLoadedResult(null)
+      await refreshCustomerList()
+      setToast(`Deleted saved report for ${customerKey}`)
+      setTimeout(()=>setToast(null), 1400)
+    } catch (e:any) {
+      setToast('Delete failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
+  // Delete all saved reports on this device (IndexedDB) with confirmation
+  async function deleteAllData() {
+    const ok = typeof window !== 'undefined' ? window.confirm('Delete ALL saved reports on this device? This cannot be undone.') : true
+    if (!ok) return
+    try {
+      await idbClearAll()
+      setLoadedResult(null)
+      setCustomerKey('')
+      await refreshCustomerList()
+      setToast('All saved reports deleted on this device')
+      setTimeout(()=>setToast(null), 1500)
+    } catch (e:any) {
+      setToast('Delete all failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
   }
 
   return (
