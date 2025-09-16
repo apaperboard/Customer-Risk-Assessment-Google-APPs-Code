@@ -406,38 +406,351 @@ async function loadLatest() {
             <option value='en'>English</option>
             <option value='tr'>Türkçe</option>
             <option value='ar'>العربية</option>
-  // Delete saved report for current customer (IndexedDB) and clear loaded state
-  async function deleteSavedForCurrent() {
-    const key = customerKey?.toUpperCase().trim()
-    if (!key) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
-    try {
-      await idbDelete(key)
-      setLoadedResult(null)
-      await refreshCustomerList()
-      setToast("Deleted saved report for ")
-      setTimeout(()=>setToast(null), 1400)
-    } catch (e:any) {
-      setToast('Delete failed: ' + (e?.message || e))
-      setTimeout(()=>setToast(null), 2200)
-    }
-  }
+  
+        </div>
+      </div>
+      <p>{t('instructions')}</p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        {fbEnabled && (
+          userEmail
+          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`Sign out (${userEmail})`}</button>
+          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{'Sign in with Google'}</button>
+        )}
+        <div style={{ opacity: 0.8 }}>Customer (B1): <b>{customerKey || '(not detected yet)'}</b></div>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <label style={{ opacity:0.8 }}>Or pick saved:</label>
+          <select value={customerKey} onChange={e=>setCustomerKey(e.target.value)} style={{ padding:6, borderRadius:6 }}>
+            <option value="">-- Select customer --</option>
+            {customerList.map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          <button onClick={refreshCustomerList} title="Refresh customer list">Refresh</button>
+        </div>
+        <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
+        <button onClick={deleteSavedForCurrent} title="Delete saved report for this customer">Delete Saved Report</button>
+        <button onClick={deleteAllData} title="Delete all saved reports on this device">Delete All Data</button>
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
+          <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) onFile(f)
+          }} />
+          {t('uploadFile')}
+        </label>
+        <span>{upload ? upload.filename : t('noFile')}</span>
+        <div>|</div>
+        <label>{t('beginBal')}: <input value={beginBal} onChange={e => { setBeginBal(e.target.value); setBeginBalAuto(false) }} style={{ width: 120 }} /></label>
+        <div>|</div>
+        <button
+          onClick={exportToExcel}
+          title="Export analysis to Excel"
+          disabled={!result || ('error' in (result as any))}
+          style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: (!result || ('error' in (result as any))) ? 'not-allowed' : 'pointer', background: '#f0f9ff', opacity: (!result || ('error' in (result as any))) ? 0.6 : 1 }}
+        >
+          Export Excel
+        </button>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <button onClick={() => setShowDebug(v => !v)} style={{ border: '1px solid #ccc', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', background: '#f6f6f6' }}>
+          {showDebug ? t('hideDebug') : t('showDebug')}
+        </button>
+      </div>
 
-  // Delete all saved reports on this device (IndexedDB) with confirmation
-  async function deleteAllData() {
-    const ok = typeof window !== 'undefined' ? window.confirm('Delete ALL saved reports on this device? This cannot be undone.') : true
-    if (!ok) return
-    try {
-      await idbClearAll()
-      setLoadedResult(null)
-      setCustomerKey('')
-      await refreshCustomerList()
-      setToast('All saved reports deleted on this device')
-      setTimeout(()=>setToast(null), 1500)
-    } catch (e:any) {
-      setToast('Delete all failed: ' + (e?.message || e))
-      setTimeout(()=>setToast(null), 2200)
-    }
-  }          </select>
+      {result && (result as any)?.error && (
+        <div style={{ color: 'crimson' }}>{result.error}</div>
+      )}
+
+      {showDebug && (
+        <DebugPanel />
+      )}
+
+      {result && !(result as any)?.error && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          <div>
+            <h2>{t('metrics')}</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('metric')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('value')}</th>
+                  <th style={{ textAlign: 'center', borderBottom: '1px solid #ddd', padding: 6 }}>{t('assessment')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
+                  const metricsMain = result.metrics.filter((m: any) => !specialLabels.has(m.label))
+                  return metricsMain.map((m: any, i: number) => {
+                    const isPct = m.label.includes('%')
+                    const fmt = (v: any) => {
+                      if (v === '') return ''
+                      if (isPct) return (v as number).toLocaleString(undefined, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      return String(v)
+                    }
+                    const color = m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent'
+                    const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
+                    const assessLocal = assessNames[lang][m.assess] ?? m.assess
+                    const note = metricNotes[m.label] || ''
+                    return (
+                      <tr key={i}>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{fmt(m.value)}</td>
+                        <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'center', background: color }}>{assessLocal}</td>
+                      </tr>
+                    )
+                  })
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2>Key Account Metrics</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('metric')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('value')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
+                  const items = result.metrics.filter((m: any) => specialLabels.has(m.label))
+                  const cl = items.find((it: any) => it.label === 'Credit Limit (TRY)')?.value
+                  const openBal = result.invoices.length ? (result.invoices[result.invoices.length - 1].running ?? 0) : 0
+                  const available: any = (typeof cl === 'number') ? Math.max(0, cl - openBal) : ''
+                  const rows = items.map((m: any, i: number) => {
+                    const isPct = m.label.includes('%')
+                    const fmt = (v: any) => {
+                      if (v === '') return ''
+                      if (isPct) return (v as number).toLocaleString(undefined, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                      if (typeof v === 'number') return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      return String(v)
+                    }
+                    const labelLocal = (metricNamesAll as any)[m.label] ? (metricNamesAll as any)[m.label][lang] : m.label
+                    const note = metricNotes[m.label] || ''
+                    const riskColor = m.label === 'Customer Risk Rating'
+                      ? (m.assess === 'Good' ? '#c6efce' : m.assess === 'Average' ? '#ffe6cc' : m.assess === 'Poor' ? '#f4a7a7' : 'transparent')
+                      : 'transparent'
+                    return (
+                      <tr key={i}>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{labelLocal}</td>
+                        <td title={note || undefined} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right', background: riskColor }}>{fmt(m.value)}</td>
+                      </tr>
+                    )
+                  })
+                  rows.push(
+                    <tr key={'available-credit'}>
+                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(metricNamesAll as any)['Available Credit (TRY)'][lang]}</td>
+                      <td title={metricNotes['Available Credit (TRY)']} style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{
+                        (typeof available === 'number') ? available.toLocaleString(undefined, { maximumFractionDigits: 0 }) : ''
+                      }</td>
+                    </tr>
+                  )
+                  return rows
+                })()}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <h2>{t('aging')}</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{t('bucket')}</th>
+                  <th style={{ textAlign: 'right', borderBottom: '1px solid #ddd', padding: 6 }}>{t('outstanding')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {['0-30 days','31-60 days','61-90 days','91+ days'].map((lbl, i) => (
+                  <tr key={lbl}>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{lbl}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{(result.aging[i]).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ gridColumn: '1 / span 2' }}>
+            <details>
+              <summary style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, fontSize: 20, marginBottom: 8 }}>{t('analysisTable')}</summary>
+              <div style={{ marginTop: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {[t('invoiceDate'),t('invoiceNo'),t('type'),t('amount'),t('closingDate'),t('termDays'),t('dueDate'),t('daysToPay'),t('daysAfterDue'),t('remaining'),t('arBalance')].map(h => (
+                    <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {result.invoices.map((inv: any, i: number) => {
+                  const daysToPay = (inv.paid && inv.closingDate) ? Math.round(((+inv.closingDate) - (+inv.invoiceDate))/86400000) : ''
+                  const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
+                  const daysAfterDue = (typeof daysToPay === 'number') ? (daysToPay - inv.term) : ''
+                  const fmtDate = (d: Date | null) => d ? d.toLocaleDateString() : ''
+                  const c = (typeof daysAfterDue === 'number' && daysAfterDue > 0) ? '#ffefef' : 'transparent'
+                  return (
+                    <tr key={i} style={{ background: c }}>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{fmtDate(inv.invoiceDate)}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.invoiceNum || ''}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.type || ''}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.amount.toLocaleString()}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{fmtDate(inv.paid ? inv.closingDate! : null)}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.term}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.paid ? dueDate.toLocaleDateString() : ''}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{typeof daysToPay === 'number' ? daysToPay.toLocaleString() : ''}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{typeof daysAfterDue === 'number' ? daysAfterDue.toLocaleString() : ''}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{inv.remaining.toLocaleString()}</td>
+                      <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{(inv.running ?? 0).toLocaleString()}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+              </div>
+            </details>
+          </div>
+
+          <div style={{ gridColumn: '1 / span 2' }}>
+            <details>
+              <summary style={{ cursor: 'pointer', userSelect: 'none', fontWeight: 600, fontSize: 20, marginBottom: 8 }}>{t('ledger')}</summary>
+              <div style={{ marginTop: 8 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {[t('date'),t('type'),t('description'),t('ref'),t('debit'),t('credit'),t('running')].map(h => (
+                    <th key={h} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 6 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(result.ledger || []).map((e: any, i: number) => (
+                  <tr key={i}>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{new Date(e.date).toLocaleDateString(locale)}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.kind}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.description}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0' }}>{e.ref || ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.debit ? e.debit.toLocaleString(locale) : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.credit ? e.credit.toLocaleString(locale) : ''}</td>
+                    <td style={{ padding: 6, borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>{e.balance.toLocaleString(locale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+              </div>
+            </details>
+          </div>
+        </div>
+      )}
+      {toast && (
+        <div style={{ position: 'fixed', right: 16, bottom: 16, background: '#111', color: 'white', padding: '8px 12px', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.2)', zIndex: 9999 }}>
+          {toast}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DebugPanel() {
+  // Read from global debug object populated by importer/analysis
+  const dbg: any = (globalThis as any).__arDebug || {}
+  const headersLower: string[] = dbg.headersLower || []
+  const headerRowIdx: number | undefined = dbg.headerRowIdx
+  const descColsHeaders: string[] = dbg.descColsHeaders || []
+  const cPayTpIndex: number | undefined = dbg.cPayTpIndex
+  const cPayTpIndexAuto: number | undefined = dbg.cPayTpIndexAuto
+  const cMaturityIndex: number | undefined = dbg.cMaturityIndex
+  const cDateIndex: number | undefined = dbg.cDateIndex
+  const checkInspect: any[] = dbg.checkInspect || []
+  const checkNoMatExamples: any[] = dbg.checkNoMatExamples || []
+  const counts = dbg.checkCounts || { total: checkInspect.length, withMaturity: checkInspect.filter((x:any)=>!!x.maturity).length, withoutMaturity: checkInspect.filter((x:any)=>!x.maturity).length }
+  const reconcile = dbg.reconcile || {}
+  const payTypes: Record<string,number> = dbg.payTypes || {}
+  const termCounts: Record<string,number> = dbg.invoiceTermCounts || {}
+  const openingRowIndex: number | undefined = dbg.openingRowIndex
+
+  return (
+    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fffef8', marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>Debug Summary</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', rowGap: 6, columnGap: 8 }}>
+        <div>Header row index:</div>
+        <div>{typeof headerRowIdx === 'number' ? String(headerRowIdx) : 'n/a'}</div>
+        <div>Headers (lower):</div>
+        <div>{headersLower.join(', ') || 'n/a'}</div>
+        <div>Description columns:</div>
+        <div>{descColsHeaders.join(', ') || 'n/a'}</div>
+        <div>Date column index:</div>
+        <div>{typeof cDateIndex === 'number' ? String(cDateIndex) : 'n/a'}</div>
+        <div>Pay Type column index:</div>
+        <div>{typeof cPayTpIndex === 'number' ? String(cPayTpIndex) : 'n/a'}{typeof cPayTpIndexAuto === 'number' ? ` (auto ${cPayTpIndexAuto})` : ''}</div>
+        <div>Maturity column index:</div>
+        <div>{typeof cMaturityIndex === 'number' ? String(cMaturityIndex) : 'n/a'}</div>
+        <div>Opening balance row index:</div>
+        <div>{typeof openingRowIndex === 'number' ? String(openingRowIndex) : 'n/a'}</div>
+        <div>Checks parsed (with/without maturity):</div>
+        <div>{counts.withMaturity} / {counts.withoutMaturity} (total {counts.total})</div>
+        <div>Reconcile (expected vs computed):</div>
+        <div>
+          {typeof reconcile.expectedOutstanding === 'number' ? reconcile.expectedOutstanding.toLocaleString() : 'n/a'}
+          {' '}vs{' '}
+          {typeof reconcile.computedOutstanding === 'number' ? reconcile.computedOutstanding.toLocaleString() : 'n/a'}
+          {typeof reconcile.delta === 'number' ? ` (delta ${reconcile.delta.toLocaleString()})` : ''}
+        </div>
+        <div>Pay types:</div>
+        <div>{Object.keys(payTypes).length ? Object.entries(payTypes).map(([k,v])=>`${k||'∅'}=${v}`).join(', ') : 'n/a'}</div>
+        <div>Invoice term counts:</div>
+        <div>{Object.keys(termCounts).length ? Object.entries(termCounts).map(([k,v])=>`${k}d=${v}`).join(', ') : 'n/a'}</div>
+        {checkNoMatExamples.length > 0 && (
+          <>
+            <div>First no-maturity example:</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{String(checkNoMatExamples[0]?.desc || '').slice(0, 200)}</div>
+          </>
+        )}
+      </div>
+      {checkInspect.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>First 3 Check Rows</div>
+          <ol>
+            {checkInspect.slice(0,3).map((x,i) => (
+              <li key={i} style={{ marginBottom: 4 }}>
+                <span style={{ color: '#555' }}>{String(x.desc).slice(0,120)}</span>
+                {' '}| maturity: {x.maturity ? new Date(x.maturity).toLocaleDateString() : '—'}
+                {' '}| raw: <span style={{ color: '#777' }}>{String(x.payTypeRaw).slice(0,60)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      <div style={{ marginTop: 8, color: '#666' }}>
+        Full details available in Console via window.__arDebug
+      </div>
+    </div>
+  )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</select>
         </div>
       </div>
       <p>{t('instructions')}</p>
@@ -766,6 +1079,7 @@ function DebugPanel() {
     </div>
   )
 }
+
 
 
 
