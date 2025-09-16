@@ -60,6 +60,28 @@ export default function App() {
     db.close()
     return val
   }
+  async function idbListKeys(): Promise<string[]> {
+    const db = await idbOpen()
+    const keys: string[] = await new Promise((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readonly')
+      const store: any = tx.objectStore('latestReports')
+      if (typeof store.getAllKeys === 'function') {
+        const req = store.getAllKeys()
+        req.onsuccess = () => resolve((req.result || []).map((k: any) => String(k)))
+        req.onerror = () => reject(req.error)
+      } else {
+        const out: string[] = []
+        const cursorReq = store.openCursor()
+        cursorReq.onsuccess = (e: any) => {
+          const cursor = e.target.result
+          if (cursor) { out.push(String(cursor.key)); cursor.continue() } else resolve(out)
+        }
+        cursorReq.onerror = () => reject(cursorReq.error)
+      }
+    })
+    db.close()
+    return keys.sort((a,b) => a.localeCompare(b))
+  }
   const i18n: Record<'en'|'tr'|'ar', Record<string,string>> = {
     en: { title: 'AR Analysis Dashboard (Client-side)', instructions: 'Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.', uploadFile: 'Upload File', noFile: 'No file selected', beginBal: 'Beginning Balance (TRY)', exportExcel: 'Export Excel', showDebug: 'Show Debug', hideDebug: 'Hide Debug', metrics: 'Metrics', metric: 'Metric', value: 'Value', assessment: 'Assessment', aging: 'Aging Buckets', bucket: 'Bucket', outstanding: 'Outstanding (TRY)', analysisTable: 'Analysis Table', invoiceDate: 'Invoice Date', invoiceNo: 'Invoice No', type: 'Type', amount: 'Amount', closingDate: 'Closing Date', termDays: 'Term (Days)', dueDate: 'Due Date', daysToPay: 'Days to Pay', daysAfterDue: 'Days After Due', remaining: 'Remaining', arBalance: 'AR Balance', ledger: 'Ledger', date: 'Date', description: 'Description', ref: 'Ref', debit: 'Debit', credit: 'Credit', running: 'Running Balance', language: 'Language' },
     tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
@@ -241,6 +263,22 @@ export default function App() {
       setTimeout(()=>setToast(null), 2200)
     }
   }
+  const [customerList, setCustomerList] = useState<string[]>([])
+  async function refreshCustomerList() {
+    try {
+      if (fbEnabled && isFirebaseReady()) {
+        // For now, per request, list local IndexedDB keys until Firebase setup is complete
+        const localKeys = await idbListKeys()
+        setCustomerList(localKeys)
+      } else {
+        const keys = await idbListKeys()
+        setCustomerList(keys)
+      }
+    } catch (e) {
+      console.warn('customer list refresh failed:', e)
+    }
+  }
+  useEffect(() => { refreshCustomerList() }, [])
 
   async function saveLatest() {
     if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
@@ -323,6 +361,16 @@ export default function App() {
           : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{'Sign in with Google'}</button>
         )}
         <div style={{ opacity: 0.8 }}>Customer (B1): <b>{customerKey || '(not detected yet)'}</b></div>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <label style={{ opacity:0.8 }}>Or pick saved:</label>
+          <select value={customerKey} onChange={e=>setCustomerKey(e.target.value)} style={{ padding:6, borderRadius:6 }}>
+            <option value="">-- Select customer --</option>
+            {customerList.map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          <button onClick={refreshCustomerList} title="Refresh customer list">Refresh</button>
+        </div>
         <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
         <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
       </div>
