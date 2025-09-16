@@ -269,11 +269,19 @@ async function loadLatest() {
       if (fbEnabled && isFirebaseReady()) {
         let remote = await fbLoad<any>(customerKey)
         if (!remote) throw new Error('No saved report found for this customer')
-        if (typeof remote === 'string') { try { remote = JSON.parse(remote) } catch {} }\n      const revived = reviveReport(remote)\n      setLoadedResult(revived)\n      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revived } catch {}\n      console.log('[loadLatest] report (firebase):', revived)
+        if (typeof remote === 'string') { try { remote = JSON.parse(remote) } catch {} }
+      const revived = reviveReport(remote)
+      setLoadedResult(revived)
+      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revived } catch {}
+      console.log('[loadLatest] report (firebase):', revived)
       } else {
         let local = await idbGet<any>(customerKey.toUpperCase().trim())
         if (!local) throw new Error('No local saved report for this customer')
-        if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }\n      const revivedLocal = reviveReport(local)\n      setLoadedResult(revivedLocal)\n      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revivedLocal } catch {}\n      console.log('[loadLatest] report (local):', revivedLocal)
+        if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }
+      const revivedLocal = reviveReport(local)
+      setLoadedResult(revivedLocal)
+      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revivedLocal } catch {}
+      console.log('[loadLatest] report (local):', revivedLocal)
       }
       setToast('Loaded latest report (see console)')
       setTimeout(()=>setToast(null), 1400)
@@ -696,6 +704,7 @@ function DebugPanel() {
     </div>
   )
 }
+
 
 
 
