@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
+import { initFirebase, isFirebaseReady, onUser, signInWithGoogle, signOutUser, saveLatestReport as fbSave, loadLatestReport as fbLoad } from './lib/firebase'
 
 type UploadState = {
   filename: string
@@ -15,15 +16,14 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState<boolean>(false)
   const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
-  // GIS + Latest report integration
-  const [idToken, setIdToken] = useState<string | null>(null)
+  // Customer key (auto from uploaded sheet B1)
   const [customerKey, setCustomerKey] = useState<string>('')
-  const gisButtonRef = useRef<HTMLDivElement | null>(null)
-  // Optional backend (not required). If not set, we store locally in the browser.
-  const WEB_APP_URL = (window as any).__AR_WEB_APP_URL || ''
-  const GIS_CLIENT_ID = (window as any).__AR_GIS_CLIENT_ID || ''
+  // Firebase auth state
+  const [userEmail, setUserEmail] = useState<string>('')
+  // Initialize Firebase if config provided globally
+  const fbEnabled = initFirebase()
 
-  // ---- Local (browser) storage via IndexedDB ----
+  // ---- Local (browser) storage via IndexedDB (fallback when Firebase not configured) ----
   function idbOpen(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const req = window.indexedDB.open('ar-dashboard-db', 1)
@@ -145,6 +145,15 @@ export default function App() {
     const wb = XLSX.read(buf, { type: 'array' })
     const wsname = wb.SheetNames.find(n => /input/i.test(n)) || wb.SheetNames[0]
     const ws = wb.Sheets[wsname]
+    // Detect customer name from B1
+    try {
+      const b1 = (ws as any)?.['B1']?.v
+      if (b1 != null && String(b1).trim() !== '') {
+        const key = String(b1).trim()
+        setCustomerKey(key)
+        console.debug('[upload] customer (B1):', key)
+      }
+    } catch {}
     console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
     const { rows, autoBeginBalance } = extractTable(ws)
     console.debug('[upload] rows parsed:', rows.length, 'autoBeginBalance:', autoBeginBalance)
@@ -204,41 +213,22 @@ export default function App() {
     }
   }, [result])
 
-  // Initialize Google Identity Services sign-in button (optional; only if a backend is used)
+  // Track Firebase auth user (if enabled)
   useEffect(() => {
-    const w = window as any
-    if (!GIS_CLIENT_ID) return
-    if (!w.google || !w.google.accounts || !w.google.accounts.id) return
+    if (!fbEnabled || !isFirebaseReady()) return
     try {
-      w.google.accounts.id.initialize({
-        client_id: GIS_CLIENT_ID,
-        callback: (resp: any) => {
-          if (resp && resp.credential) {
-            setIdToken(resp.credential)
-            setToast('Signed in')
-            setTimeout(() => setToast(null), 1200)
-          }
-        },
-        auto_select: false,
-      })
-      if (gisButtonRef.current) {
-        w.google.accounts.id.renderButton(gisButtonRef.current, { theme: 'outline', size: 'large' })
-      }
-    } catch (e) {
-      console.warn('GIS init failed:', e)
-    }
-  }, [GIS_CLIENT_ID])
+      const off = onUser(u => setUserEmail(u?.email || ''))
+      return () => off()
+    } catch {}
+  }, [fbEnabled])
 
   async function loadLatest() {
-    if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
+    if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      if (WEB_APP_URL) {
-        if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
-        const url = `${WEB_APP_URL}?customer=${encodeURIComponent(customerKey)}&id_token=${encodeURIComponent(idToken)}`
-        const res = await fetch(url, { cache: 'no-store' })
-        const data = await res.json()
-        if (!data.ok) throw new Error(data.error || 'Load failed')
-        console.log('[loadLatest] report (server):', data.report)
+      if (fbEnabled && isFirebaseReady()) {
+        const remote = await fbLoad<any>(customerKey)
+        if (!remote) throw new Error('No saved report found for this customer')
+        console.log('[loadLatest] report (firebase):', remote)
       } else {
         const local = await idbGet<any>(customerKey.toUpperCase().trim())
         if (!local) throw new Error('No local saved report for this customer')
@@ -253,17 +243,11 @@ export default function App() {
   }
 
   async function saveLatest() {
-    if (!customerKey) { setToast('Enter customer name'); setTimeout(()=>setToast(null), 1200); return }
+    if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     if (!result || 'error' in result) { setToast('No analysis to save'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      if (WEB_APP_URL) {
-        if (!idToken) { setToast('Sign in first'); setTimeout(()=>setToast(null), 1200); return }
-        const res = await fetch(WEB_APP_URL, {
-          method: 'POST',
-          body: JSON.stringify({ id_token: idToken, customer: customerKey, report: result })
-        })
-        const data = await res.json()
-        if (!data.ok) throw new Error(data.error || 'Save failed')
+      if (fbEnabled && isFirebaseReady()) {
+        await fbSave(customerKey, result)
       } else {
         await idbSet(customerKey.toUpperCase().trim(), result)
       }
@@ -333,15 +317,14 @@ export default function App() {
       </div>
       <p>{t('instructions')}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        {!!WEB_APP_URL && <div ref={gisButtonRef} />}
-        <input
-          placeholder="Customer name (B1)"
-          value={customerKey}
-          onChange={e => setCustomerKey(e.target.value)}
-          style={{ padding: 8, minWidth: 260 }}
-        />
-        <button onClick={loadLatest}>{WEB_APP_URL ? 'Load Latest (Server)' : 'Load Latest (This Browser)'}</button>
-        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{WEB_APP_URL ? 'Save Latest (Server)' : 'Save Latest (This Browser)'}</button>
+        {fbEnabled && (
+          userEmail
+          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`Sign out (${userEmail})`}</button>
+          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{'Sign in with Google'}</button>
+        )}
+        <div style={{ opacity: 0.8 }}>Customer (B1): <b>{customerKey || '(not detected yet)'}</b></div>
+        <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
