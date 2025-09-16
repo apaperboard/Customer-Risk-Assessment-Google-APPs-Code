@@ -367,6 +367,13 @@ async function loadLatest() {
     XLSX.writeFile(wb, `${base}-ar-analysis.xlsx`)
   }
 
+  // Clear in-memory loaded report so the UI reverts to computed-from-upload
+  function clearLoaded() {
+    setLoadedResult(null)
+    setToast('Cleared loaded report from memory')
+    setTimeout(()=>setToast(null), 1200)
+  }
+
   return (
     <div style={{ fontFamily: 'system-ui, sans-serif', padding: 16 }} dir={lang==='ar'?'rtl':'ltr'}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
@@ -400,6 +407,7 @@ async function loadLatest() {
         </div>
         <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
         <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
+        <button onClick={clearLoaded} title="Clear the loaded report from memory">Clear Memory</button>
       </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
