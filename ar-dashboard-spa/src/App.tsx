@@ -193,7 +193,33 @@ export default function App() {
     }
   }
 
-  const [loadedResult, setLoadedResult] = useState<any | null>(null)\n  const computedResult = useMemo(() => {\n    if (!upload) return null\n    const model = parseRowsToModel(upload.rows)\n    const bb = (() => {\n      const s = String(beginBal ?? '').trim()\n      const onlyDigits = s.replace(/[^0-9,\\.-]/g, '')\n      let n: number\n      if (onlyDigits.includes(',') && onlyDigits.includes('.')) {\n        const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')\n        const norm = (lc > ld) ? onlyDigits.replace(/\\./g, '').replace(',', '.') : onlyDigits.replace(/,/g, '')\n        n = Number(norm)\n      } else if (onlyDigits.includes(',')) {\n        const parts = onlyDigits.split(',');\n        const norm = (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) ? (parts[0].replace(/,/g,'') + '.' + parts[1]) : onlyDigits.replace(/,/g,'')\n        n = Number(norm)\n      } else {\n        n = Number(onlyDigits)\n      }\n      return isFinite(n) ? n : 0\n    })()\n    const start = model.firstTransactionDate || model.firstInvoiceDate\n    if (!start) return { error: 'No dated rows found.' }\n    return analyze(model.invoices, model.payments, start, bb)\n  }, [upload, beginBal])\n  const result: any = loadedResult || computedResult
+  const [loadedResult, setLoadedResult] = useState<any | null>(null)
+  const computedResult = useMemo(() => {
+    if (!upload) return null
+    const model = parseRowsToModel(upload.rows)
+    // Parse beginning balance robustly (supports commas and different locales)
+    const bb = (() => {
+      const s = String(beginBal ?? '').trim()
+      const onlyDigits = s.replace(/[^0-9,\.-]/g, '')
+      let n: number
+      if (onlyDigits.includes(',') && onlyDigits.includes('.')) {
+        const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')
+        const norm = (lc > ld) ? onlyDigits.replace(/\./g, '').replace(',', '.') : onlyDigits.replace(/,/g, '')
+        n = Number(norm)
+      } else if (onlyDigits.includes(',')) {
+        const parts = onlyDigits.split(',');
+        const norm = (parts.length === 2 && parts[1].length > 0 && parts[1].length <= 2) ? (parts[0].replace(/,/g,'') + '.' + parts[1]) : onlyDigits.replace(/,/g,'')
+        n = Number(norm)
+      } else {
+        n = Number(onlyDigits)
+      }
+      return isFinite(n) ? n : 0
+    })()
+    const start = model.firstTransactionDate || model.firstInvoiceDate
+    if (!start) return { error: 'No dated rows found.' }
+    return analyze(model.invoices, model.payments, start, bb)
+  }, [upload, beginBal])
+  const result: any = loadedResult || computedResult
 
   useEffect(() => {
     if (!result) return
