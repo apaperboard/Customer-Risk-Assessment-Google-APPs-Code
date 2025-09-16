@@ -267,13 +267,13 @@ async function loadLatest() {
     if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     try {
       if (fbEnabled && isFirebaseReady()) {
-        const remote = await fbLoad<any>(customerKey)
+        let remote = await fbLoad<any>(customerKey)
         if (!remote) throw new Error('No saved report found for this customer')
-        console.log('[loadLatest] report (firebase):', remote)
+        if (typeof remote === 'string') { try { remote = JSON.parse(remote) } catch {} }\n      const revived = reviveReport(remote)\n      setLoadedResult(revived)\n      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revived } catch {}\n      console.log('[loadLatest] report (firebase):', revived)
       } else {
-        const local = await idbGet<any>(customerKey.toUpperCase().trim())
+        let local = await idbGet<any>(customerKey.toUpperCase().trim())
         if (!local) throw new Error('No local saved report for this customer')
-        console.log('[loadLatest] report (local):', local)
+        if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }\n      const revivedLocal = reviveReport(local)\n      setLoadedResult(revivedLocal)\n      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revivedLocal } catch {}\n      console.log('[loadLatest] report (local):', revivedLocal)
       }
       setToast('Loaded latest report (see console)')
       setTimeout(()=>setToast(null), 1400)
@@ -696,6 +696,7 @@ function DebugPanel() {
     </div>
   )
 }
+
 
 
 
