@@ -10,6 +10,18 @@ type UploadState = {
 } | null
 
 export default function App() {
+port React, { useEffect, useMemo, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
+import { parseRowsToModel, analyze } from './lib/analysis'
+import { extractTable } from './lib/importer'
+import { initFirebase, isFirebaseReady, onUser, signInWithGoogle, signOutUser, saveLatestReport as fbSave, loadLatestReport as fbLoad } from './lib/firebase'
+
+type UploadState = {
+  filename: string
+  rows: Record<string, any>[]
+} | null
+
+export default function App() {
   const [upload, setUpload] = useState<UploadState>(null)
   const [beginBal, setBeginBal] = useState<string>('0')
   const [beginBalAuto, setBeginBalAuto] = useState<boolean>(true)
@@ -59,6 +71,28 @@ export default function App() {
     })
     db.close()
     return val
+  }
+  async function idbDelete(key: string): Promise<void> {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.delete(key)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+  }
+  async function idbClearAll(): Promise<void> {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.clear()
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
   }
   async function idbListKeys(): Promise<string[]> {
     const db = await idbOpen()
@@ -384,7 +418,38 @@ async function loadLatest() {
             <option value='en'>English</option>
             <option value='tr'>Türkçe</option>
             <option value='ar'>العربية</option>
-          </select>
+  // Delete saved report for current customer (IndexedDB) and clear loaded state
+  async function deleteSavedForCurrent() {
+    const key = customerKey?.toUpperCase().trim()
+    if (!key) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      await idbDelete(key)
+      setLoadedResult(null)
+      await refreshCustomerList()
+      setToast(Deleted saved report for )
+      setTimeout(()=>setToast(null), 1400)
+    } catch (e:any) {
+      setToast('Delete failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
+  // Delete all saved reports on this device (IndexedDB) with confirmation
+  async function deleteAllData() {
+    const ok = typeof window !== 'undefined' ? window.confirm('Delete ALL saved reports on this device? This cannot be undone.') : true
+    if (!ok) return
+    try {
+      await idbClearAll()
+      setLoadedResult(null)
+      setCustomerKey('')
+      await refreshCustomerList()
+      setToast('All saved reports deleted on this device')
+      setTimeout(()=>setToast(null), 1500)
+    } catch (e:any) {
+      setToast('Delete all failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }          </select>
         </div>
       </div>
       <p>{t('instructions')}</p>
@@ -407,8 +472,9 @@ async function loadLatest() {
         </div>
         <button onClick={loadLatest}>{fbEnabled ? 'Load Latest (Firebase)' : 'Load Latest (This Browser)'}</button>
         <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{fbEnabled ? 'Save Latest (Firebase)' : 'Save Latest (This Browser)'}</button>
-        <button onClick={clearLoaded} title="Clear the loaded report from memory">Clear Memory</button>
+        <button onClick={deleteSavedForCurrent} title="Delete saved report for this customer">Delete Saved Report</button>
       </div>
+        <button onClick={deleteAllData} title="Delete all saved reports on this device">Delete All Data</button>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
           <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => {
@@ -712,6 +778,11 @@ function DebugPanel() {
     </div>
   )
 }
+
+
+
+
+
 
 
 
