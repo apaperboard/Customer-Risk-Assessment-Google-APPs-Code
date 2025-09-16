@@ -10,18 +10,6 @@ type UploadState = {
 } | null
 
 export default function App() {
-port React, { useEffect, useMemo, useRef, useState } from 'react'
-import * as XLSX from 'xlsx'
-import { parseRowsToModel, analyze } from './lib/analysis'
-import { extractTable } from './lib/importer'
-import { initFirebase, isFirebaseReady, onUser, signInWithGoogle, signOutUser, saveLatestReport as fbSave, loadLatestReport as fbLoad } from './lib/firebase'
-
-type UploadState = {
-  filename: string
-  rows: Record<string, any>[]
-} | null
-
-export default function App() {
   const [upload, setUpload] = useState<UploadState>(null)
   const [beginBal, setBeginBal] = useState<string>('0')
   const [beginBalAuto, setBeginBalAuto] = useState<boolean>(true)
@@ -426,7 +414,7 @@ async function loadLatest() {
       await idbDelete(key)
       setLoadedResult(null)
       await refreshCustomerList()
-      setToast(Deleted saved report for )
+      setToast("Deleted saved report for ")
       setTimeout(()=>setToast(null), 1400)
     } catch (e:any) {
       setToast('Delete failed: ' + (e?.message || e))
@@ -778,6 +766,7 @@ function DebugPanel() {
     </div>
   )
 }
+
 
 
 
