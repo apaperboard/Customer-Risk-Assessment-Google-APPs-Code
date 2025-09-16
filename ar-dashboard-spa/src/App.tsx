@@ -223,7 +223,7 @@ export default function App() {
 
   useEffect(() => {
     if (!result) return
-    if ('error' in result) {
+    if ((result as any) && (result as any).error) {
       console.warn('[analysis] error:', result.error)
     } else {
       console.log('[analysis] summary:', {
@@ -420,7 +420,7 @@ async function loadLatest() {
         </button>
       </div>
 
-      {result && 'error' in result && (
+      {result && (result as any)?.error && (
         <div style={{ color: 'crimson' }}>{result.error}</div>
       )}
 
@@ -428,7 +428,7 @@ async function loadLatest() {
         <DebugPanel />
       )}
 
-      {result && !('error' in result) && (
+      {result && !(result as any)?.error && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
             <h2>{t('metrics')}</h2>
@@ -696,6 +696,9 @@ function DebugPanel() {
     </div>
   )
 }
+
+
+
 
 
 
