@@ -22,9 +22,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install deps
+      - name: Install deps (npm ci)
         working-directory: ar-dashboard-spa
-        run: npm install --no-audit --no-fund --no-audit --no-fund        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build
         working-directory: ar-dashboard-spa
         run: npm run build
@@ -52,5 +52,4 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             Preview is ready: ${{ steps.deployment.outputs.page_url }}
-
 

@@ -29,9 +29,9 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install deps
+      - name: Install deps (npm ci)
         run: |
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
 
       - name: Build (Vite, relative base)
         run: |
