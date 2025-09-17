@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
+import { initFirebase, isFirebaseReady, onUser, signInWithGoogle, signOutUser, saveLatestReport as fbSave, loadLatestReport as fbLoad } from './lib/firebase'
 
 type UploadState = {
   filename: string
@@ -15,12 +16,106 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [showDebug, setShowDebug] = useState<boolean>(false)
   const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
+  // Customer key (auto from uploaded sheet B1)
+  const [customerKey, setCustomerKey] = useState<string>('')
+  // Firebase auth state
+  const [userEmail, setUserEmail] = useState<string>('')
+  // Initialize Firebase if config provided globally
+  const fbEnabled = initFirebase()
+
+  // ---- Local (browser) storage via IndexedDB (fallback when Firebase not configured) ----
+  function idbOpen(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = window.indexedDB.open('ar-dashboard-db', 1)
+      req.onupgradeneeded = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains('latestReports')) {
+          db.createObjectStore('latestReports')
+        }
+      }
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => reject(req.error)
+    })
+  }
+  async function idbSet(key: string, value: any) {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.put(value, key)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+  }
+  async function idbGet<T = any>(key: string): Promise<T | null> {
+    const db = await idbOpen()
+    const val = await new Promise<T | null>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readonly')
+      const store = tx.objectStore('latestReports')
+      const req = store.get(key)
+      req.onsuccess = () => resolve(req.result ?? null)
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+    return val
+  }
+  async function idbDelete(key: string): Promise<void> {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.delete(key)
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+  }
+  async function idbClearAll(): Promise<void> {
+    const db = await idbOpen()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readwrite')
+      const store = tx.objectStore('latestReports')
+      const req = store.clear()
+      req.onsuccess = () => resolve()
+      req.onerror = () => reject(req.error)
+    })
+    db.close()
+  }
+  async function idbListKeys(): Promise<string[]> {
+    const db = await idbOpen()
+    const keys: string[] = await new Promise((resolve, reject) => {
+      const tx = db.transaction('latestReports', 'readonly')
+      const store: any = tx.objectStore('latestReports')
+      if (typeof store.getAllKeys === 'function') {
+        const req = store.getAllKeys()
+        req.onsuccess = () => resolve((req.result || []).map((k: any) => String(k)))
+        req.onerror = () => reject(req.error)
+      } else {
+        const out: string[] = []
+        const cursorReq = store.openCursor()
+        cursorReq.onsuccess = (e: any) => {
+          const cursor = e.target.result
+          if (cursor) { out.push(String(cursor.key)); cursor.continue() } else resolve(out)
+        }
+        cursorReq.onerror = () => reject(cursorReq.error)
+      }
+    })
+    db.close()
+    return keys.sort((a,b) => a.localeCompare(b))
+  }
   const i18n: Record<'en'|'tr'|'ar', Record<string,string>> = {
     en: { title: 'AR Analysis Dashboard (Client-side)', instructions: 'Drop an Excel/CSV exported from your ERP or click to choose a file. Data stays in your browser.', uploadFile: 'Upload File', noFile: 'No file selected', beginBal: 'Beginning Balance (TRY)', exportExcel: 'Export Excel', showDebug: 'Show Debug', hideDebug: 'Hide Debug', metrics: 'Metrics', metric: 'Metric', value: 'Value', assessment: 'Assessment', aging: 'Aging Buckets', bucket: 'Bucket', outstanding: 'Outstanding (TRY)', analysisTable: 'Analysis Table', invoiceDate: 'Invoice Date', invoiceNo: 'Invoice No', type: 'Type', amount: 'Amount', closingDate: 'Closing Date', termDays: 'Term (Days)', dueDate: 'Due Date', daysToPay: 'Days to Pay', daysAfterDue: 'Days After Due', remaining: 'Remaining', arBalance: 'AR Balance', ledger: 'Ledger', date: 'Date', description: 'Description', ref: 'Ref', debit: 'Debit', credit: 'Credit', running: 'Running Balance', language: 'Language' },
     tr: { title: 'AL Analiz Panosu (İstemci tarafı)', instructions: 'ERP’nizden dışa aktarılan Excel/CSV dosyasını bırakın veya tıklayıp seçin. Veriler tarayıcınızda kalır.', uploadFile: 'Dosya Yükle', noFile: 'Dosya seçilmedi', beginBal: 'Açılış Bakiyesi (TRY)', exportExcel: 'Excel’e Aktar', showDebug: 'Hata Ayıklamayı Göster', hideDebug: 'Hata Ayıklamayı Gizle', metrics: 'Metikler', metric: 'Metik', value: 'Değer', assessment: 'Değerlendirme', aging: 'Vade Yaşlandırma', bucket: 'Kova', outstanding: 'Bakiye (TRY)', analysisTable: 'Analiz Tablosu', invoiceDate: 'Fatura Tarihi', invoiceNo: 'Fatura No', type: 'Tür', amount: 'Tutar', closingDate: 'Kapanış Tarihi', termDays: 'Vade (Gün)', dueDate: 'Vade Tarihi', daysToPay: 'Ödeme Günleri', daysAfterDue: 'Vade Sonrası Gün', remaining: 'Kalan', arBalance: 'AR Bakiye', ledger: 'Yevmiye', date: 'Tarih', description: 'Açıklama', ref: 'Ref', debit: 'Borç', credit: 'Alacak', running: 'Bakiye', language: 'Dil' },
     ar: { title: 'لوحة تحليل الذمم (على المتصفح)', instructions: 'أسقط ملف Excel/CSV من نظام ERP أو اختر ملفاً. تبقى البيانات في المتصفح.', uploadFile: 'رفع ملف', noFile: 'لم يتم اختيار ملف', beginBal: 'الرصيد الافتتاحي (ليرة)', exportExcel: 'تصدير إلى Excel', showDebug: 'إظهار التصحيح', hideDebug: 'إخفاء التصحيح', metrics: 'المؤشرات', metric: 'المؤشر', value: 'القيمة', assessment: 'التقييم', aging: 'أعمار الديون', bucket: 'الفئة', outstanding: 'الرصيد (ليرة)', analysisTable: 'جدول التحليل', invoiceDate: 'تاريخ الفاتورة', invoiceNo: 'رقم الفاتورة', type: 'النوع', amount: 'المبلغ', closingDate: 'تاريخ الإقفال', termDays: 'المدة (أيام)', dueDate: 'تاريخ الاستحقاق', daysToPay: 'أيام السداد', daysAfterDue: 'أيام بعد الاستحقاق', remaining: 'المتبقي', arBalance: 'رصيد الذمم', ledger: 'دفتر القيود', date: 'التاريخ', description: 'الوصف', ref: 'المرجع', debit: 'مدين', credit: 'دائن', running: 'الرصيد المتراكم', language: 'اللغة' }
   }
-  const t = (k: string) => i18n[lang][k] || k
+  // Supplemental UI labels not present in the original map
+  const i18nExtra: Record<'en'|'tr'|'ar', Record<string,string>> = {
+    en: { loadLatest: 'Load Latest', saveLatest: 'Save Latest', deleteSaved: 'Delete Saved Report', deleteAllData: 'Delete All Data', refresh: 'Refresh', signInGoogle: 'Sign in with Google', signOut: 'Sign out', customerB1: 'Customer (B1)', orPickSaved: 'Or pick saved:' },
+    tr: { loadLatest: 'Son Kaydı Yükle', saveLatest: 'Son Kaydı Kaydet', deleteSaved: 'Kaydı Sil', deleteAllData: 'Tüm Verileri Sil', refresh: 'Yenile', signInGoogle: 'Google ile giriş', signOut: 'Çıkış', customerB1: 'Müşteri (B1)', orPickSaved: 'Veya kayıtlı seç:' },
+    ar: { loadLatest: 'تحميل آخر تقرير', saveLatest: 'حفظ آخر تقرير', deleteSaved: 'حذف التقرير المحفوظ', deleteAllData: 'حذف كل البيانات', refresh: 'تحديث', signInGoogle: 'تسجيل الدخول بواسطة Google', signOut: 'تسجيل خروج', customerB1: 'العميل (B1)', orPickSaved: 'أو اختر محفوظاً:' }
+  }
+  const t = (k: string) => (i18n[lang] && k in i18n[lang] ? i18n[lang][k] : (i18nExtra[lang] && i18nExtra[lang][k]) || k)
   const locale = lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : 'en-US'
 
   // Metric name translations (by original analysis label)
@@ -150,7 +245,16 @@ export default function App() {
     const wb = XLSX.read(buf, { type: 'array' })
     const wsname = wb.SheetNames.find(n => /input/i.test(n)) || wb.SheetNames[0]
     const ws = wb.Sheets[wsname]
-    console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
+    // Detect customer name from B1
+    try {
+      const b1 = (ws as any)?.['B1']?.v
+      if (b1 != null && String(b1).trim() !== '') {
+        const key = String(b1).trim()
+        setCustomerKey(key)
+        console.debug('[upload] customer (B1):', key)
+      }
+    } catch {}
+    setLoadedResult(null); console.debug('[upload] sheets:', wb.SheetNames, 'chosen:', wsname)
     const { rows, autoBeginBalance } = extractTable(ws)
     console.debug('[upload] rows parsed:', rows.length, 'autoBeginBalance:', autoBeginBalance)
     setUpload({ filename: f.name, rows })
@@ -167,14 +271,14 @@ export default function App() {
     }
   }
 
-  const result = useMemo(() => {
+  const [loadedResult, setLoadedResult] = useState<any | null>(null)
+  const computedResult = useMemo(() => {
     if (!upload) return null
     const model = parseRowsToModel(upload.rows)
     // Parse beginning balance robustly (supports commas and different locales)
     const bb = (() => {
       const s = String(beginBal ?? '').trim()
       const onlyDigits = s.replace(/[^0-9,\.-]/g, '')
-      // prefer comma as thousands; if both present, assume last separator is decimal
       let n: number
       if (onlyDigits.includes(',') && onlyDigits.includes('.')) {
         const lc = onlyDigits.lastIndexOf(','); const ld = onlyDigits.lastIndexOf('.')
@@ -193,10 +297,11 @@ export default function App() {
     if (!start) return { error: 'No dated rows found.' }
     return analyze(model.invoices, model.payments, start, bb)
   }, [upload, beginBal])
+  const result: any = loadedResult || computedResult
 
   useEffect(() => {
     if (!result) return
-    if ('error' in result) {
+    if ((result as any) && (result as any).error) {
       console.warn('[analysis] error:', result.error)
     } else {
       console.log('[analysis] summary:', {
@@ -209,11 +314,99 @@ export default function App() {
     }
   }, [result])
 
+  // Track Firebase auth user (if enabled)
+  useEffect(() => {
+    if (!fbEnabled || !isFirebaseReady()) return
+    try {
+      const off = onUser(u => setUserEmail(u?.email || ''))
+      return () => off()
+    } catch {}
+  }, [fbEnabled])
+
+    function reviveReport(rep: any): any {
+    try {
+      const out: any = { ...rep }
+      if (out.startDate) { const d = new Date(out.startDate); if (!isNaN(+d)) out.startDate = d }
+      if (Array.isArray(out.invoices)) {
+        out.invoices = out.invoices.map((inv: any) => {
+          const ii = { ...inv }
+          if (ii.invoiceDate) { const d = new Date(ii.invoiceDate); if (!isNaN(+d)) ii.invoiceDate = d }
+          if (ii.closingDate) { const d = new Date(ii.closingDate); if (!isNaN(+d)) ii.closingDate = d }
+          return ii
+        })
+      }
+      if (Array.isArray(out.months)) {
+        out.months = out.months.map((m: any) => ({ ...m, dt: new Date(m.dt) }))
+      }
+      return out
+    } catch { return rep }
+  }
+async function loadLatest() {
+    if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      if (fbEnabled && isFirebaseReady()) {
+        let remote = await fbLoad<any>(customerKey)
+        if (!remote) throw new Error('No saved report found for this customer')
+        if (typeof remote === 'string') { try { remote = JSON.parse(remote) } catch {} }
+      const revived = reviveReport(remote)
+      setLoadedResult(revived)
+      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revived } catch {}
+      console.log('[loadLatest] report (firebase):', revived)
+      } else {
+        let local = await idbGet<any>(customerKey.toUpperCase().trim())
+        if (!local) throw new Error('No local saved report for this customer')
+        if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }
+      const revivedLocal = reviveReport(local)
+      setLoadedResult(revivedLocal)
+      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revivedLocal } catch {}
+      console.log('[loadLatest] report (local):', revivedLocal)
+      }
+      setToast('Loaded latest report (see console)')
+      setTimeout(()=>setToast(null), 1400)
+    } catch (e:any) {
+      setToast('Load error: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+  const [customerList, setCustomerList] = useState<string[]>([])
+  async function refreshCustomerList() {
+    try {
+      if (fbEnabled && isFirebaseReady()) {
+        // For now, per request, list local IndexedDB keys until Firebase setup is complete
+        const localKeys = await idbListKeys()
+        setCustomerList(localKeys)
+      } else {
+        const keys = await idbListKeys()
+        setCustomerList(keys)
+      }
+    } catch (e) {
+      console.warn('customer list refresh failed:', e)
+    }
+  }
+  useEffect(() => { refreshCustomerList() }, [])
+
+  async function saveLatest() {
+    if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
+    if (!result || 'error' in result) { setToast('No analysis to save'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      if (fbEnabled && isFirebaseReady()) {
+        await fbSave(customerKey, result)
+      } else {
+        await idbSet(customerKey.toUpperCase().trim(), result)
+      }
+      setToast('Saved latest report')
+      setTimeout(()=>setToast(null), 1200)
+    } catch (e:any) {
+      setToast('Save error: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
   const exportToExcel = () => {
     if (!result || 'error' in result) return
     const wb = XLSX.utils.book_new()
 
-    const metricsRows = result.metrics.map(m => ({ Metric: m.label, Value: m.value, Assessment: m.assess }))
+    const metricsRows = result.metrics.map((m: any) => ({ Metric: m.label, Value: m.value, Assessment: m.assess }))
     const wsMetrics = XLSX.utils.json_to_sheet(metricsRows)
     XLSX.utils.book_append_sheet(wb, wsMetrics, 'Metrics')
 
@@ -222,7 +415,7 @@ export default function App() {
     const wsAging = XLSX.utils.json_to_sheet(agingRows)
     XLSX.utils.book_append_sheet(wb, wsAging, 'Aging')
 
-    const analysisRows = result.invoices.map(inv => {
+    const analysisRows = result.invoices.map((inv: any) => {
       const closing = inv.paid && inv.closingDate ? inv.closingDate : null
       const daysToPay = closing ? Math.round(((+closing) - (+inv.invoiceDate))/86400000) : ''
       const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
@@ -244,12 +437,45 @@ export default function App() {
     const wsAnalysis = XLSX.utils.json_to_sheet(analysisRows)
     XLSX.utils.book_append_sheet(wb, wsAnalysis, 'Analysis')
 
-    const trendRows = result.months.map(m => ({ Month: new Date(m.dt).toLocaleDateString(), 'Avg Days to Pay': m.avg }))
+    const trendRows = result.months.map((m: any) => ({ Month: new Date(m.dt).toLocaleDateString(), 'Avg Days to Pay': m.avg }))
     const wsTrend = XLSX.utils.json_to_sheet(trendRows)
     XLSX.utils.book_append_sheet(wb, wsTrend, 'Trend')
 
     const base = upload?.filename ? upload.filename.replace(/\.[^.]+$/, '') : 'export'
     XLSX.writeFile(wb, `${base}-ar-analysis.xlsx`)
+  }
+
+  // Delete saved report for current customer (IndexedDB) and clear loaded state
+  async function deleteSavedForCurrent() {
+    const key = customerKey?.toUpperCase().trim()
+    if (!key) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
+    try {
+      await idbDelete(key)
+      setLoadedResult(null)
+      await refreshCustomerList()
+      setToast(`Deleted saved report for ${customerKey}`)
+      setTimeout(()=>setToast(null), 1400)
+    } catch (e:any) {
+      setToast('Delete failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
+  }
+
+  // Delete all saved reports on this device (IndexedDB) with confirmation
+  async function deleteAllData() {
+    const ok = typeof window !== 'undefined' ? window.confirm('Delete ALL saved reports on this device? This cannot be undone.') : true
+    if (!ok) return
+    try {
+      await idbClearAll()
+      setLoadedResult(null)
+      setCustomerKey('')
+      await refreshCustomerList()
+      setToast('All saved reports deleted on this device')
+      setTimeout(()=>setToast(null), 1500)
+    } catch (e:any) {
+      setToast('Delete all failed: ' + (e?.message || e))
+      setTimeout(()=>setToast(null), 2200)
+    }
   }
 
   return (
@@ -262,10 +488,33 @@ export default function App() {
             <option value='en'>English</option>
             <option value='tr'>Türkçe</option>
             <option value='ar'>العربية</option>
-          </select>
+  
+</select>
         </div>
       </div>
       <p>{t('instructions')}</p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+        {fbEnabled && (
+          userEmail
+          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`${t('signOut')} (${userEmail})`}</button>
+          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{t('signInGoogle')}</button>
+        )}
+        <div style={{ opacity: 0.8 }}>{t('customerB1')}: <b>{customerKey || '(not detected yet)'}</b></div>
+        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+          <label style={{ opacity:0.8 }}>{t('orPickSaved')}</label>
+          <select value={customerKey} onChange={e=>setCustomerKey(e.target.value)} style={{ padding:6, borderRadius:6 }}>
+            <option value="">-- Select customer --</option>
+            {customerList.map(k => (
+              <option key={k} value={k}>{k}</option>
+            ))}
+          </select>
+          <button onClick={refreshCustomerList} title="Refresh customer list">{t('refresh')}</button>
+        </div>
+        <button onClick={loadLatest}>{t('loadLatest')}</button>
+        <button onClick={saveLatest} disabled={!result || ('error' in (result as any))}>{t('saveLatest')}</button>
+        <button onClick={deleteSavedForCurrent} title="Delete saved report for this customer">{t('deleteSaved')}</button>
+        <button onClick={deleteAllData} title="Delete all saved reports on this device">{t('deleteAllData')}</button>
+      </div>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
         <label style={{ border: '1px solid #ccc', padding: '8px 12px', borderRadius: 6, cursor: 'pointer', background: '#fafafa' }}>
           <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={(e) => {
@@ -293,7 +542,7 @@ export default function App() {
         </button>
       </div>
 
-      {result && 'error' in result && (
+      {result && (result as any)?.error && (
         <div style={{ color: 'crimson' }}>{result.error}</div>
       )}
 
@@ -301,7 +550,7 @@ export default function App() {
         <DebugPanel />
       )}
 
-      {result && !('error' in result) && (
+      {result && !(result as any)?.error && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
             <h2>{t('metrics')}</h2>
@@ -316,8 +565,8 @@ export default function App() {
               <tbody>
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
-                  const metricsMain = result.metrics.filter(m => !specialLabels.has(m.label))
-                  return metricsMain.map((m, i) => {
+                  const metricsMain = result.metrics.filter((m: any) => !specialLabels.has(m.label))
+                  return metricsMain.map((m: any, i: number) => {
                     const isPct = m.label.includes('%')
                     const fmt = (v: any) => {
                       if (v === '') return ''
@@ -354,11 +603,11 @@ export default function App() {
               <tbody>
                 {(() => {
                   const specialLabels = new Set(['Customer Risk Rating','Average Monthly Purchases (TRY)','Credit Limit (TRY)'])
-                  const items = result.metrics.filter(m => specialLabels.has(m.label))
-                  const cl = items.find(it => it.label === 'Credit Limit (TRY)')?.value
+                  const items = result.metrics.filter((m: any) => specialLabels.has(m.label))
+                  const cl = items.find((it: any) => it.label === 'Credit Limit (TRY)')?.value
                   const openBal = result.invoices.length ? (result.invoices[result.invoices.length - 1].running ?? 0) : 0
                   const available: any = (typeof cl === 'number') ? Math.max(0, cl - openBal) : ''
-                  const rows = items.map((m, i) => {
+                  const rows = items.map((m: any, i: number) => {
                     const isPct = m.label.includes('%')
                     const fmt = (v: any) => {
                       if (v === '') return ''
@@ -425,7 +674,7 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-                {result.invoices.map((inv, i) => {
+                {result.invoices.map((inv: any, i: number) => {
                   const daysToPay = (inv.paid && inv.closingDate) ? Math.round(((+inv.closingDate) - (+inv.invoiceDate))/86400000) : ''
                   const dueDate = new Date(+inv.invoiceDate + inv.term*86400000)
                   const daysAfterDue = (typeof daysToPay === 'number') ? (daysToPay - inv.term) : ''
@@ -607,3 +856,6 @@ function DebugPanel() {
     </div>
   )
 }
+
+
+
