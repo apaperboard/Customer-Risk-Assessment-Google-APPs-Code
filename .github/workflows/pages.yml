@@ -1,9 +1,9 @@
-name: Deploy SPA to GitHub Pages
+name: Pages
 
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  pull_request:
 
 permissions:
   contents: read
@@ -11,23 +11,35 @@ permissions:
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: pages
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ar-dashboard-spa
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install deps
-        working-directory: ar-dashboard-spa
-        run: npm install
-      - name: Build
-        working-directory: ar-dashboard-spa
-        run: npm run build
+        run: |
+          npm install --no-audit --no-fund
+
+      - name: Build (Vite, relative base)
+        run: |
+          npm run build -- --base=./
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -43,3 +55,6 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          preview: ${{ github.event_name == 'pull_request' }}
+

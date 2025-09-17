@@ -2,7 +2,7 @@
   "name": "appsscript",
   "version": "1.0.0",
   "description": "",
-  "main": "Code.js",
+  "main": "ar-dashboard-spa/dist/index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
