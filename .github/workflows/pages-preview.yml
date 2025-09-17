@@ -24,7 +24,7 @@ jobs:
           node-version: 20
       - name: Install deps
         working-directory: ar-dashboard-spa
-        run: npm install
+        run: npm install --no-audit --no-fund --no-audit --no-fund        run: npm install --no-audit --no-fund
       - name: Build
         working-directory: ar-dashboard-spa
         run: npm run build
@@ -52,4 +52,5 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             Preview is ready: ${{ steps.deployment.outputs.page_url }}
+
 
