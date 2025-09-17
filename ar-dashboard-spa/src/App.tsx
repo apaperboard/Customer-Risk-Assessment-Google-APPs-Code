@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
-import { initFirebase, isFirebaseReady, onUser, signInWithGoogle, signOutUser, saveLatestReport as fbSave, loadLatestReport as fbLoad } from './lib/firebase'
+// Firebase integration removed: local-only SPA
 
 type UploadState = {
   filename: string
@@ -18,10 +18,7 @@ export default function App() {
   const [lang, setLang] = useState<'en'|'tr'|'ar'>('en')
   // Customer key (auto from uploaded sheet B1)
   const [customerKey, setCustomerKey] = useState<string>('')
-  // Firebase auth state
-  const [userEmail, setUserEmail] = useState<string>('')
-  // Initialize Firebase if config provided globally
-  const fbEnabled = initFirebase()
+  // No auth; data stays in browser
 
   // ---- Local (browser) storage via IndexedDB (fallback when Firebase not configured) ----
   function idbOpen(): Promise<IDBDatabase> {
@@ -314,14 +311,7 @@ export default function App() {
     }
   }, [result])
 
-  // Track Firebase auth user (if enabled)
-  useEffect(() => {
-    if (!fbEnabled || !isFirebaseReady()) return
-    try {
-      const off = onUser(u => setUserEmail(u?.email || ''))
-      return () => off()
-    } catch {}
-  }, [fbEnabled])
+  // No auth user tracking
 
     function reviveReport(rep: any): any {
     try {
@@ -344,23 +334,13 @@ export default function App() {
 async function loadLatest() {
     if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      if (fbEnabled && isFirebaseReady()) {
-        let remote = await fbLoad<any>(customerKey)
-        if (!remote) throw new Error('No saved report found for this customer')
-        if (typeof remote === 'string') { try { remote = JSON.parse(remote) } catch {} }
-      const revived = reviveReport(remote)
-      setLoadedResult(revived)
-      try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revived } catch {}
-      console.log('[loadLatest] report (firebase):', revived)
-      } else {
-        let local = await idbGet<any>(customerKey.toUpperCase().trim())
-        if (!local) throw new Error('No local saved report for this customer')
-        if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }
+      let local = await idbGet<any>(customerKey.toUpperCase().trim())
+      if (!local) throw new Error('No local saved report for this customer')
+      if (typeof local === 'string') { try { local = JSON.parse(local) } catch {} }
       const revivedLocal = reviveReport(local)
       setLoadedResult(revivedLocal)
       try { const dbg = (globalThis as any).__arDebug || ((globalThis as any).__arDebug = {}); dbg.loadedReport = revivedLocal } catch {}
       console.log('[loadLatest] report (local):', revivedLocal)
-      }
       setToast('Loaded latest report (see console)')
       setTimeout(()=>setToast(null), 1400)
     } catch (e:any) {
@@ -371,14 +351,8 @@ async function loadLatest() {
   const [customerList, setCustomerList] = useState<string[]>([])
   async function refreshCustomerList() {
     try {
-      if (fbEnabled && isFirebaseReady()) {
-        // For now, per request, list local IndexedDB keys until Firebase setup is complete
-        const localKeys = await idbListKeys()
-        setCustomerList(localKeys)
-      } else {
-        const keys = await idbListKeys()
-        setCustomerList(keys)
-      }
+      const keys = await idbListKeys()
+      setCustomerList(keys)
     } catch (e) {
       console.warn('customer list refresh failed:', e)
     }
@@ -389,11 +363,7 @@ async function loadLatest() {
     if (!customerKey) { setToast('No customer name (B1)'); setTimeout(()=>setToast(null), 1200); return }
     if (!result || 'error' in result) { setToast('No analysis to save'); setTimeout(()=>setToast(null), 1200); return }
     try {
-      if (fbEnabled && isFirebaseReady()) {
-        await fbSave(customerKey, result)
-      } else {
-        await idbSet(customerKey.toUpperCase().trim(), result)
-      }
+      await idbSet(customerKey.toUpperCase().trim(), result)
       setToast('Saved latest report')
       setTimeout(()=>setToast(null), 1200)
     } catch (e:any) {
@@ -494,11 +464,7 @@ async function loadLatest() {
       </div>
       <p>{t('instructions')}</p>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-        {fbEnabled && (
-          userEmail
-          ? <button onClick={() => { signOutUser().catch(()=>{}); }}>{`${t('signOut')} (${userEmail})`}</button>
-          : <button onClick={() => { signInWithGoogle().then(u=>setUserEmail(u.email||'')); }}>{t('signInGoogle')}</button>
-        )}
+        {/* Auth removed */}
         <div style={{ opacity: 0.8 }}>{t('customerB1')}: <b>{customerKey || '(not detected yet)'}</b></div>
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           <label style={{ opacity:0.8 }}>{t('orPickSaved')}</label>
