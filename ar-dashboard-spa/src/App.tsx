@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { parseRowsToModel, analyze } from './lib/analysis'
 import { extractTable } from './lib/importer'
@@ -20,7 +20,7 @@ export default function App() {
   const [customerKey, setCustomerKey] = useState<string>('')
   // No auth; data stays in browser
 
-  // ---- Local (browser) storage via IndexedDB (fallback when Firebase not configured) ----
+  // ---- Local (browser) storage via IndexedDB ----
   function idbOpen(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const req = window.indexedDB.open('ar-dashboard-db', 1)
@@ -108,9 +108,9 @@ export default function App() {
   }
   // Supplemental UI labels not present in the original map
   const i18nExtra: Record<'en'|'tr'|'ar', Record<string,string>> = {
-    en: { loadLatest: 'Load Latest', saveLatest: 'Save Latest', deleteSaved: 'Delete Saved Report', deleteAllData: 'Delete All Data', refresh: 'Refresh', signInGoogle: 'Sign in with Google', signOut: 'Sign out', customerB1: 'Customer (B1)', orPickSaved: 'Or pick saved:' },
-    tr: { loadLatest: 'Son Kaydı Yükle', saveLatest: 'Son Kaydı Kaydet', deleteSaved: 'Kaydı Sil', deleteAllData: 'Tüm Verileri Sil', refresh: 'Yenile', signInGoogle: 'Google ile giriş', signOut: 'Çıkış', customerB1: 'Müşteri (B1)', orPickSaved: 'Veya kayıtlı seç:' },
-    ar: { loadLatest: 'تحميل آخر تقرير', saveLatest: 'حفظ آخر تقرير', deleteSaved: 'حذف التقرير المحفوظ', deleteAllData: 'حذف كل البيانات', refresh: 'تحديث', signInGoogle: 'تسجيل الدخول بواسطة Google', signOut: 'تسجيل خروج', customerB1: 'العميل (B1)', orPickSaved: 'أو اختر محفوظاً:' }
+    en: { loadLatest: 'Load Latest', saveLatest: 'Save Latest', deleteSaved: 'Delete Saved Report', deleteAllData: 'Delete All Data', refresh: 'Refresh', customerB1: 'Customer (B1)', orPickSaved: 'Or pick saved:' },
+    tr: { loadLatest: 'Son Kaydı Yükle', saveLatest: 'Son Kaydı Kaydet', deleteSaved: 'Kaydı Sil', deleteAllData: 'Tüm Verileri Sil', refresh: 'Yenile', customerB1: 'Müşteri (B1)', orPickSaved: 'Veya kayıtlı seç:' },
+    ar: { loadLatest: 'تحميل آخر تقرير', saveLatest: 'حفظ آخر تقرير', deleteSaved: 'حذف التقرير المحفوظ', deleteAllData: 'حذف كل البيانات', refresh: 'تحديث', customerB1: 'العميل (B1)', orPickSaved: 'أو اختر محفوظاً:' }
   }
   const t = (k: string) => (i18n[lang] && k in i18n[lang] ? i18n[lang][k] : (i18nExtra[lang] && i18nExtra[lang][k]) || k)
   const locale = lang === 'tr' ? 'tr-TR' : lang === 'ar' ? 'ar-EG' : 'en-US'
@@ -822,6 +822,4 @@ function DebugPanel() {
     </div>
   )
 }
-
-
 
